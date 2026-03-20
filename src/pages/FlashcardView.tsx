@@ -35,7 +35,7 @@ export const FlashcardView: React.FC = () => {
   const { user } = useAuth();
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
-  const { submitAnswer, isUpdating } = useProgressUpdater();
+  const { submitAnswer, markAsSeen, isUpdating } = useProgressUpdater();
   const { toasts, addToast, dismiss } = useToast();
 
   const [setTitle, setSetTitle] = useState('');
@@ -54,6 +54,8 @@ export const FlashcardView: React.FC = () => {
   // Mastery state per card
   const [cardMastery, setCardMastery] = useState<Record<string, number>>({});
   const [cardLeech, setCardLeech] = useState<Record<string, boolean>>({});
+  // true once the initial progress DB query has returned — prevents markAsSeen firing before we know which cards already have rows
+  const [masteryLoaded, setMasteryLoaded] = useState(false);
   // flash feedback: 'correct' | 'wrong' | null
   const [flashFeedback, setFlashFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [penaltyAnimate, setPenaltyAnimate] = useState(false);
@@ -61,6 +63,19 @@ export const FlashcardView: React.FC = () => {
   const activeCards = showStarredOnly
     ? cards.filter(c => starredIds.has(c.id))
     : cards;
+
+  // When user flips a card for the first time (no prior progress row), mark it as seen.
+  // Guard: wait for masteryLoaded so we don't fire for cards that already have rows.
+  useEffect(() => {
+    if (!isFlipped || !setId || !masteryLoaded) return;
+    const card = activeCards[currentIndex];
+    if (!card) return;
+    if (cardMastery[card.id] !== undefined) return; // already has a progress row
+    markAsSeen(card.id, setId).then(() => {
+      setCardMastery(prev => ({ ...prev, [card.id]: 1 }));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFlipped, masteryLoaded]);
 
   // Load initial mastery levels from DB
   useEffect(() => {
@@ -80,8 +95,14 @@ export const FlashcardView: React.FC = () => {
         });
         setCardMastery(m);
         setCardLeech(l);
+        setMasteryLoaded(true);
       });
   }, [setId, user?.id]);
+
+  // For mock mode: mastery is always empty but we still need to allow markAsSeen to fire
+  useEffect(() => {
+    if (isMockMode) setMasteryLoaded(true);
+  }, []);
 
   useEffect(() => {
     if (!setId) return;

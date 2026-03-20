@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase, isMockMode } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { todayVN } from '../utils/time';
 import {
   computeProgressUpdate,
   getMasteryBadge,
@@ -24,6 +25,8 @@ export interface UseProgressUpdaterReturn {
     mode: StudyMode,
     setId: string,
   ) => Promise<SubmitResult>;
+  /** Marks a card as "seen" for the first time (creates progress row + logs học mới). No-op if row already exists. */
+  markAsSeen: (cardId: string, setId: string) => Promise<void>;
   isUpdating: boolean;
 }
 
@@ -107,11 +110,12 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
         );
 
         // 4. Write daily_log events
-        //    'learned'  = first correct answer (prev mastery was 1, default start)
-        //    'forgotten' = wrong answer on a well-mastered card (prev mastery >= 7)
-        const today = now.toISOString().split('T')[0];
+        //    'learned'  = card enters "đang học" for the first time (no prior progress row)
+        //    'forgotten' = wrong answer on a mastered card (prev mastery >= 8)
+        const today = todayVN();
 
-        if (isCorrect && snapshot.mastery_level <= 1) {
+        if (!existing) {
+          // First interaction ever — card transitions from "chưa học" → "đang học"
           await supabase.from('daily_log').upsert(
             {
               user_id:    user.id,
@@ -122,13 +126,26 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
             },
             { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
           );
-        } else if (!isCorrect && snapshot.mastery_level >= 7) {
+        } else if (!isCorrect && snapshot.mastery_level >= 8) {
+          // Card was mastered (≥ 8) but user got it wrong → "đã quên"
           await supabase.from('daily_log').upsert(
             {
               user_id:    user.id,
               card_id:    cardId,
               set_id:     setId,
               event_type: 'forgotten',
+              logged_at:  today,
+            },
+            { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
+          );
+        } else if (existing && snapshot.mastery_level >= 1 && snapshot.mastery_level < 8) {
+          // Card is in "đang học" range — log a 'reviewed' event once per card per day
+          await supabase.from('daily_log').upsert(
+            {
+              user_id:    user.id,
+              card_id:    cardId,
+              set_id:     setId,
+              event_type: 'reviewed',
               logged_at:  today,
             },
             { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
@@ -147,5 +164,56 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
     [user?.id],
   );
 
-  return { submitAnswer, isUpdating };
+  const markAsSeen = useCallback(
+    async (cardId: string, setId: string): Promise<void> => {
+      if (!user?.id || isMockMode) return;
+      const now = new Date();
+      const today = todayVN();
+
+      // DB-level guard: if a progress row already exists, do nothing.
+      // This prevents stale 'learned' events caused by any race condition.
+      const { data: existing } = await supabase
+        .from('progress')
+        .select('card_id')
+        .eq('user_id', user.id)
+        .eq('card_id', cardId)
+        .maybeSingle();
+
+      if (existing) return;
+
+      // Truly first time — create progress row
+      await supabase.from('progress').upsert(
+        {
+          user_id:             user.id,
+          card_id:             cardId,
+          set_id:              setId,
+          mastery_level:       1,
+          consecutive_correct: 0,
+          ease_factor:         2.5,
+          penalty_count:       0,
+          is_leech:            false,
+          last_reviewed_at:    now.toISOString(),
+          next_review_at:      new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+          last_result:         'correct',
+          updated_at:          now.toISOString(),
+        },
+        { onConflict: 'user_id,card_id', ignoreDuplicates: true },
+      );
+
+      // Log 'học mới' for today — deduplicated by unique constraint
+      await supabase.from('daily_log').upsert(
+        {
+          user_id:    user.id,
+          card_id:    cardId,
+          set_id:     setId,
+          event_type: 'learned',
+          logged_at:  today,
+        },
+        { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
+      );
+    },
+    [user?.id],
+  );
+
+  return { submitAnswer, markAsSeen, isUpdating };
 }

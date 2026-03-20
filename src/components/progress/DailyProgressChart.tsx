@@ -50,7 +50,7 @@ const CustomTooltip: React.FC<any> = ({ active, payload, label }) => {
 
 export const DailyProgressChart: React.FC<DailyProgressChartProps> = ({ setId }) => {
   const [range, setRange] = useState<DayRange>(7);
-  const { stats, totalLearned, totalForgotten, streak, loading } = useDailyStats(range, setId);
+  const { stats, uniqueLearnedCards, uniqueForgottenCards, uniqueReviewedCards, streak, loading } = useDailyStats(range, setId);
 
   const chartData = stats.map(s => ({ ...s, dateLabel: formatDate(s.date, range) }));
 
@@ -80,15 +80,21 @@ export const DailyProgressChart: React.FC<DailyProgressChartProps> = ({ setId })
         </div>
       </div>
 
-      {/* Summary totals */}
-      <div className="px-5 pt-4 flex gap-4 text-sm">
+      {/* Summary totals — unique card counts, not raw event sums */}
+      <div className="px-5 pt-4 flex flex-wrap gap-3 text-sm">
         <span className="flex items-center gap-1.5 font-semibold text-emerald-600">
           <span className="w-2.5 h-2.5 rounded-sm bg-emerald-400 inline-block" />
-          +{totalLearned} từ mới
+          +{uniqueLearnedCards} từ học mới
         </span>
+        {uniqueReviewedCards > 0 && (
+          <span className="flex items-center gap-1.5 font-semibold text-amber-600">
+            <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />
+            +{uniqueReviewedCards} đang học
+          </span>
+        )}
         <span className="flex items-center gap-1.5 font-semibold text-red-500">
           <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block" />
-          -{totalForgotten} từ quên
+          -{uniqueForgottenCards} từ quên
         </span>
       </div>
 

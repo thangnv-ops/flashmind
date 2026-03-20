@@ -42,6 +42,7 @@ const sqlFiles = [
   resolve(__dirname, '../plan/sql/migration.sql'),
   resolve(__dirname, '../plan/sql/phase6-migration.sql'),
   resolve(__dirname, '../plan/sql/phase7-migration.sql'),
+  resolve(__dirname, '../plan/sql/phase8-patch.sql'),
 ];
 
 function loadStatements(filePath: string): string[] {
