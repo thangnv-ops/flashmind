@@ -11,29 +11,17 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Build-time env vars — values are supplied via docker-compose build.args
-# which reads from the .env file on the host. Nothing is hardcoded here.
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_MINIO_ENDPOINT
-ARG VITE_MINIO_ACCESS_KEY
-ARG VITE_MINIO_SECRET_KEY
-ARG VITE_MINIO_BUCKET
-ARG VITE_MINIO_REGION
-
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
-    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
-    VITE_MINIO_ENDPOINT=$VITE_MINIO_ENDPOINT \
-    VITE_MINIO_ACCESS_KEY=$VITE_MINIO_ACCESS_KEY \
-    VITE_MINIO_SECRET_KEY=$VITE_MINIO_SECRET_KEY \
-    VITE_MINIO_BUCKET=$VITE_MINIO_BUCKET \
-    VITE_MINIO_REGION=$VITE_MINIO_REGION
-
 COPY package*.json ./
 RUN npm ci
 
+# Copy .env.local so Vite can read VITE_* vars at build time
+COPY .env.example .env.local
+
 COPY . .
 RUN npm run build
+
+# Remove secrets from final image after build
+RUN rm -f .env.local
 
 EXPOSE 4173
 
