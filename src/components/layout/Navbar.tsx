@@ -1,11 +1,19 @@
 import React from 'react';
-import { Search, Plus, Bell, User } from 'lucide-react';
+import { Search, Plus, Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
-interface NavbarProps {
-  onCreate: () => void;
-}
+export const Navbar: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
-export const Navbar: React.FC<NavbarProps> = ({ onCreate }) => {
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/auth');
+  };
+
+  // Get initials from email for avatar
+  const initials = user?.email?.charAt(0).toUpperCase() ?? '?';
   return (
     <nav className="h-16 border-b bg-white flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-8 flex-1">
@@ -28,7 +36,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onCreate }) => {
 
       <div className="flex items-center gap-4">
         <button 
-          onClick={onCreate}
+          onClick={() => navigate('/editor')}
           className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -41,8 +49,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onCreate }) => {
           <Bell className="w-5 h-5" />
         </button>
         
-        <button className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 hover:ring-2 hover:ring-primary/20 transition-all">
-          <User className="w-5 h-5" />
+        <div className="w-px h-6 bg-slate-200 mx-2" />
+        
+        <button
+          onClick={handleSignOut}
+          title={`Sign out (${user?.email})`}
+          className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold hover:ring-2 hover:ring-primary/40 transition-all"
+        >
+          {initials}
         </button>
       </div>
     </nav>

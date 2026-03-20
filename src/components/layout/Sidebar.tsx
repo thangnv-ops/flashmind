@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Home, 
   Library, 
@@ -13,12 +14,13 @@ import { cn } from '../../lib/utils';
 import { MOCK_FOLDERS } from '../../mockData';
 
 export const Sidebar: React.FC = () => {
+  const navigate = useNavigate();
   const [isFoldersOpen, setIsFoldersOpen] = useState(true);
 
   const navItems = [
-    { icon: Home, label: 'Home', active: true },
-    { icon: Library, label: 'Your Library', active: false },
-    { icon: Clock, label: 'Recent', active: false },
+    { icon: Home, label: 'Home', path: '/dashboard' },
+    { icon: Library, label: 'Your Library', path: '/dashboard' },
+    { icon: Clock, label: 'Recent', path: '/dashboard' },
   ];
 
   return (
@@ -27,9 +29,10 @@ export const Sidebar: React.FC = () => {
         {navItems.map((item) => (
           <button
             key={item.label}
+            onClick={() => navigate(item.path)}
             className={cn(
               "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-              item.active 
+              item.label === 'Home'
                 ? "bg-primary/10 text-primary" 
                 : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}

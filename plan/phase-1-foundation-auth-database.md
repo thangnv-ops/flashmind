@@ -205,40 +205,68 @@ Sau khi setup xong, viết seed script hoặc chèn data thủ công vào Supaba
 
 ---
 
-## File cần tạo mới
+## ✅ TRẠNG THÁI THỰC HIỆN (Completed)
+
+**Đã hoàn thành toàn bộ Phase 1.**
+
+### Thay đổi so với plan và lý do:
+
+| Thay đổi | Lý do |
+|---|---|
+| `ProtectedRoute` dùng `<Outlet />` (React Router v6 pattern) thay vì `children` prop | Sạch hơn với nested routes của v6; cho phép group nhiều routes trong 1 `<Route element={<ProtectedRoute />}>` |
+| Thêm `src/vite-env.d.ts` với `ImportMetaEnv` | tsconfig không có `vite/client` type → `import.meta.env` bị lỗi TS2339 |
+| Navbar: bỏ `onCreate` prop, dùng `useNavigate` nội bộ | Không cần truyền prop qua App.tsx nữa khi dùng React Router |
+| `App.tsx` dùng `DashboardLayout` component với `<Outlet>` | Tách layout (Navbar + Sidebar) khỏi routes; cleaner than wrapping each route |
+| `author` field xóa khỏi `StudySet` type + mockData | Không có trong DB schema; `StudySetCard` hiển thị "You" hardcoded (sẽ thay bằng email user ở Phase 5) |
+| `cards` → `flashcards` trong `StudySet` | Align với tên bảng DB |
+| `progress: number` → `progressPercent?: number` (optional) | Là computed field từ bảng `progress`, không lưu trực tiếp trong `study_sets` |
+| `createdAt: number` → `created_at: string` (ISO) | Align với PostgreSQL `TIMESTAMPTZ` format |
+| SQL migration xuất ra `plan/sql/migration.sql` | Reference file để user chạy trong Supabase Dashboard |
+| `.env.local.example` thay vì `.env.local` | Không expose credentials; user tự copy + điền |
+
+### File đã tạo mới:
 ```
 src/
+  vite-env.d.ts           ← Vite env type declarations (thêm mới, không có trong plan)
   lib/
-    supabase.ts           ← Supabase client
+    supabase.ts           ✅
   contexts/
-    AuthContext.tsx       ← Auth provider & hook
+    AuthContext.tsx       ✅
   pages/
-    AuthPage.tsx          ← Login / Register UI
+    AuthPage.tsx          ✅
   components/
     layout/
-      ProtectedRoute.tsx  ← Route guard
+      ProtectedRoute.tsx  ✅ (dùng Outlet pattern)
+plan/
+  sql/
+    migration.sql         ✅ (thêm mới, không có trong plan)
+.env.local.example        ✅
 ```
 
-## File cần sửa
+### File đã sửa:
 ```
 src/
-  types/index.ts          ← Cập nhật types theo DB schema
-  App.tsx                 ← Wrap với AuthProvider + React Router
-  main.tsx                ← Thêm BrowserRouter
+  types/index.ts          ✅ Updated
+  mockData.ts             ✅ Updated (user_id, flashcards, is_starred, position, timestamps)
+  App.tsx                 ✅ React Router + AuthProvider + DashboardLayout
+  main.tsx                ✅ BrowserRouter
+  pages/
+    Dashboard.tsx         ✅ useNavigate (bỏ props)
+    SetEditor.tsx         ✅ useNavigate + useParams (bỏ onBack prop)
+    FlashcardView.tsx     ✅ useNavigate + useParams (bỏ setId + onBack props)
+    MatchGame.tsx         ✅ useNavigate + useParams (bỏ setId + onBack props)
+  components/
+    layout/
+      Navbar.tsx          ✅ useNavigate, signOut, email avatar (bỏ onCreate prop)
+      Sidebar.tsx         ✅ useNavigate (bỏ static active state)
+    dashboard/
+      StudySetCard.tsx    ✅ flashcards?.length, progressPercent (bỏ author, progress)
 ```
 
----
-
-## Thứ tự thực hiện
-1. Cài packages (`@supabase/supabase-js`, `react-router-dom`)
-2. Tạo Supabase project + `.env.local`
-3. Chạy SQL migration (tạo bảng + RLS)
-4. Tạo `src/lib/supabase.ts`
-5. Tạo `AuthContext.tsx`
-6. Tạo `AuthPage.tsx`
-7. Refactor `App.tsx` sang React Router
-8. Tạo `ProtectedRoute.tsx`
-9. Test luồng đăng ký → đăng nhập → xem Dashboard
+### Còn cần làm (user action):
+1. **Tạo Supabase project** tại supabase.com
+2. **Copy** `.env.local.example` → `.env.local` và điền URL + ANON_KEY
+3. **Chạy** `plan/sql/migration.sql` trong Supabase SQL Editor
 
 ---
 

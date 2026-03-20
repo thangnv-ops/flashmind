@@ -12,10 +12,11 @@ Xây dựng 3 chế độ học còn thiếu: **Learn (Multiple Choice)**, **Wri
 ### FlashcardView (`src/pages/FlashcardView.tsx`) — Gần hoàn chỉnh
 - [x] Hiển thị từng thẻ một với `FlipCard` component (CSS 3D Transform)
 - [x] Keyboard shortcuts: Space (flip), ArrowLeft/ArrowRight (prev/next)
-- [x] Shuffle cards
+- [x] Shuffle cards (dùng `set.flashcards` — đã cập nhật Phase 1)
 - [x] Auto-play mode (tự lật & chuyển thẻ sau 3s)
 - [x] Progress bar ở cuối màn hình
 - [x] Confetti khi hoàn thành toàn bộ set
+- [x] `useNavigate` + `useParams` (không còn callback props sau Phase 1)
 - [ ] **Chưa:** Starring (gắn sao) từng thẻ
 - [ ] **Chưa:** Filter "chỉ học thẻ gắn sao"
 - [ ] **Chưa:** Settings panel (Settings button có nhưng chưa hoạt động)
@@ -201,7 +202,7 @@ function checkAnswer(userInput: string, correctAnswer: string): 'correct' | 'alm
 }
 ```
 
-> Implement hàm `levenshtein()` đơn giản hoặc dùng thư viện nhỏ như `fastest-levenshtein`.
+> **Lưu ý (từ Phase 1):** Tất cả pages mới (LearnMode, WriteMode, MockTest) **không nhận callback props**. Dùng `useNavigate()` và `useParams<{ setId: string }>()` để navigate và lấy setId.
 
 #### Cài package
 ```bash
@@ -252,6 +253,10 @@ Màn hình kết quả cuối:
 ### 3.5 Cập nhật Navigation
 
 #### App.tsx — Thêm routes mới
+
+> **Phase 1 đã setup React Router** với `ProtectedRoute` dùng `<Outlet>` pattern.
+> Thêm vào group `<Route element={<ProtectedRoute />}>` trong `App.tsx`.
+
 ```
 /learn/:setId   → LearnMode
 /write/:setId   → WriteMode

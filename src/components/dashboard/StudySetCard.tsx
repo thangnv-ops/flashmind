@@ -20,7 +20,7 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
               {set.title}
             </h3>
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mt-1">
-              {set.cards.length} Cards
+              {set.flashcards?.length ?? 0} Cards
             </p>
           </div>
           <button className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors">
@@ -32,18 +32,18 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
           <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
             <User className="w-3 h-3 text-slate-500" />
           </div>
-          <span className="text-xs font-medium text-slate-600">{set.author}</span>
+          <span className="text-xs font-medium text-slate-600">You</span>
         </div>
 
         <div className="space-y-1.5 mb-6">
           <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase tracking-tight">
             <span>Progress</span>
-            <span>{set.progress}%</span>
+            <span>{set.progressPercent ?? 0}%</span>
           </div>
           <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
             <div 
               className="h-full bg-primary transition-all duration-500 ease-out"
-              style={{ width: `${set.progress}%` }}
+              style={{ width: `${set.progressPercent ?? 0}%` }}
             />
           </div>
         </div>

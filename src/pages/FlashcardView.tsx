@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   ChevronLeft, 
@@ -15,13 +16,15 @@ import { MOCK_SETS } from '../mockData';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
 
-export const FlashcardView: React.FC<{ setId: string; onBack: () => void }> = ({ setId, onBack }) => {
+export const FlashcardView: React.FC = () => {
+  const navigate = useNavigate();
+  const { setId } = useParams<{ setId: string }>();
   const set = MOCK_SETS.find(s => s.id === setId) || MOCK_SETS[0];
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
-  const [cards, setCards] = useState(set.cards);
+  const [cards, setCards] = useState(set.flashcards ?? []);
 
   const nextCard = useCallback(() => {
     setIsFlipped(false);
@@ -52,7 +55,7 @@ export const FlashcardView: React.FC<{ setId: string; onBack: () => void }> = ({
 
   const toggleShuffle = () => {
     if (isShuffled) {
-      setCards(set.cards);
+      setCards(set.flashcards ?? []);
     } else {
       setCards([...cards].sort(() => Math.random() - 0.5));
     }
@@ -96,7 +99,7 @@ export const FlashcardView: React.FC<{ setId: string; onBack: () => void }> = ({
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
           <div>

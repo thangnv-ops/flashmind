@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { StudySetCard } from '../components/dashboard/StudySetCard';
 import { MOCK_SETS } from '../mockData';
 import { Plus, Clock, Filter } from 'lucide-react';
 import { StudySetCardSkeleton } from '../components/ui/Skeleton';
 
-
-interface DashboardProps {
-  onCreateSet: () => void;
-  onSelectSet: (id: string) => void;
-  onPlayMatch: (id: string) => void;
-}
-
-export const Dashboard: React.FC<DashboardProps> = ({ onCreateSet, onSelectSet, onPlayMatch }) => {
+export const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -33,7 +28,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCreateSet, onSelectSet, 
             Filter
           </button>
           <button 
-            onClick={onCreateSet}
+            onClick={() => navigate('/editor')}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-dark transition-colors shadow-sm"
           >
             <Plus className="w-4 h-4" />
@@ -57,13 +52,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onCreateSet, onSelectSet, 
                 <StudySetCard 
                   key={set.id} 
                   set={set} 
-                  onClick={onSelectSet} 
-                  onPlayMatch={onPlayMatch}
+                  onClick={(id) => navigate(`/flashcards/${id}`)} 
+                  onPlayMatch={(id) => navigate(`/match/${id}`)}
                 />
               ))}
               
               <button 
-                onClick={onCreateSet}
+                onClick={() => navigate('/editor')}
                 className="border-2 border-dashed border-slate-200 rounded-xl p-5 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-primary/40 hover:text-primary transition-all group min-h-[180px]"
               >
                 <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-primary/10 transition-colors">

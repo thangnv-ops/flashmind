@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Timer, 
@@ -19,7 +20,9 @@ interface GameCard {
   status: 'idle' | 'selected' | 'correct' | 'wrong';
 }
 
-export const MatchGame: React.FC<{ setId: string; onBack: () => void }> = ({ setId, onBack }) => {
+export const MatchGame: React.FC = () => {
+  const navigate = useNavigate();
+  const { setId } = useParams<{ setId: string }>();
   const set = MOCK_SETS.find(s => s.id === setId) || MOCK_SETS[0];
   const [cards, setCards] = useState<GameCard[]>([]);
   const [selected, setSelected] = useState<GameCard | null>(null);
@@ -30,7 +33,7 @@ export const MatchGame: React.FC<{ setId: string; onBack: () => void }> = ({ set
 
   const initGame = useCallback(() => {
     const gameCards: GameCard[] = [];
-    set.cards.forEach(card => {
+    (set.flashcards ?? []).forEach(card => {
       gameCards.push({
         id: `term-${card.id}`,
         content: card.term,
@@ -128,7 +131,7 @@ export const MatchGame: React.FC<{ setId: string; onBack: () => void }> = ({ set
     <div className="min-h-screen bg-slate-900 flex flex-col text-white">
       <header className="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
@@ -229,7 +232,7 @@ export const MatchGame: React.FC<{ setId: string; onBack: () => void }> = ({ set
                 Play Again
               </button>
               <button 
-                onClick={onBack}
+                onClick={() => navigate('/dashboard')}
                 className="px-8 py-3 bg-primary hover:bg-primary-dark rounded-xl font-bold transition-all"
               >
                 Back to Dashboard

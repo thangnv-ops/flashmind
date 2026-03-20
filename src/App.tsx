@@ -1,54 +1,68 @@
-import { useState } from 'react';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { SetEditor } from './pages/SetEditor';
 import { FlashcardView } from './pages/FlashcardView';
 import { MatchGame } from './pages/MatchGame';
+import { AuthPage } from './pages/AuthPage';
 
-type Page = 'dashboard' | 'editor' | 'flashcards' | 'match';
+// Banner shown when running without a real Supabase project
+function DemoBanner() {
+  const { isMockMode } = useAuth();
+  if (!isMockMode) return null;
+  return (
+    <div className="bg-amber-400 text-amber-900 text-xs font-semibold text-center py-1.5 px-4">
+      ⚠️ Demo Mode — data is not saved.
+      Copy <code className="bg-amber-300 px-1 rounded">.env.local.example</code> → <code className="bg-amber-300 px-1 rounded">.env.local</code> and connect Supabase to enable full features.
+    </div>
+  );
+}
 
-export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('dashboard');
-  const [selectedSetId, setSelectedSetId] = useState<string | null>(null);
-
-  const navigateTo = (page: Page, setId: string | null = null) => {
-    setCurrentPage(page);
-    setSelectedSetId(setId);
-    window.scrollTo(0, 0);
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return (
-          <div className="flex flex-1">
-            <Sidebar />
-            <main className="flex-1 bg-bg-light">
-              <Dashboard 
-                onCreateSet={() => navigateTo('editor')}
-                onSelectSet={(id) => navigateTo('flashcards', id)}
-                onPlayMatch={(id) => navigateTo('match', id)}
-              />
-            </main>
-          </div>
-        );
-      case 'editor':
-        return <SetEditor onBack={() => navigateTo('dashboard')} />;
-      case 'flashcards':
-        return <FlashcardView setId={selectedSetId!} onBack={() => navigateTo('dashboard')} />;
-      case 'match':
-        return <MatchGame setId={selectedSetId!} onBack={() => navigateTo('dashboard')} />;
-      default:
-        return <Dashboard onCreateSet={() => navigateTo('editor')} onSelectSet={(id) => navigateTo('flashcards', id)} onPlayMatch={(id) => navigateTo('match', id)} />;
-    }
-  };
-
+// Layout for dashboard: includes Navbar + Sidebar
+function DashboardLayout() {
   return (
     <div className="min-h-screen flex flex-col font-sans">
-      {currentPage === 'dashboard' && <Navbar onCreate={() => navigateTo('editor')} />}
-      {renderPage()}
+      <DemoBanner />
+      <Navbar />
+      <div className="flex flex-1">
+        <Sidebar />
+        <main className="flex-1 bg-bg-light">
+          <Outlet />
+        </main>
+      </div>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        {/* Public */}
+        <Route path="/auth" element={<AuthPage />} />
+
+        {/* Dashboard — protected, with Navbar + Sidebar layout */}
+        <Route element={<ProtectedRoute />}>
+          <Route element={<DashboardLayout />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+          </Route>
+        </Route>
+
+        {/* Full-screen protected routes (no Navbar/Sidebar) */}
+        <Route element={<ProtectedRoute />}>
+          <Route path="/editor" element={<SetEditor />} />
+          <Route path="/editor/:setId" element={<SetEditor />} />
+          <Route path="/flashcards/:setId" element={<FlashcardView />} />
+          <Route path="/match/:setId" element={<MatchGame />} />
+        </Route>
+
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </AuthProvider>
   );
 }
 

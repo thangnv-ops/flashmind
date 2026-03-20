@@ -14,19 +14,24 @@ Hoàn thiện Dashboard với dữ liệu thực từ DB, xây dựng hệ thố
 - [x] Section "Recent Activity" với `StudySetCard` grid (3 cột)
 - [x] Loading skeleton (1.2s artificial delay)
 - [x] Section "Your Folders" (chỉ có nút "New Folder", hoàn toàn tĩnh)
+- [x] `useNavigate` thay thế callback props (Phase 1)
 - [x] Dữ liệu từ `MOCK_SETS` — **chưa có DB**
 - [ ] **Chưa:** Sort/Filter sets
 - [ ] **Chưa:** Search
 - [ ] **Chưa:** Progress % chính xác từ DB
 
 ### StudySetCard (`src/components/dashboard/StudySetCard.tsx`)
-- [x] Title, author, card count, progress bar, nút Flashcards + Match
-- [x] Progress bar từ `set.progress` (mock static number)
-- [ ] **Chưa:** `progress` tính từ bảng `progress` trong DB
+- [x] Title, card count, progress bar (Phase 1 đã cập nhật: `flashcards?.length`, `progressPercent`)
+- [x] Nút Flashcards + Match dùng callback (Phase 1 đã giữ callbacks từ Dashboard)
+- [x] `author` field đã bị **xóa** — hiển thị "You" hardcoded
+- [ ] **Chưa:** `progressPercent` tính từ bảng `progress` trong DB
 - [ ] **Chưa:** `last_accessed` hiển thị timestamp
 
-### Sidebar (`src/components/layout/Sidebar.tsx`) — Chưa xem chi tiết
-- [ ] Cần kiểm tra và update để hiển thị folders & navigation
+### Sidebar (`src/components/layout/Sidebar.tsx`) — Đã cập nhật Phase 1
+- [x] `useNavigate` cho nav items
+- [x] `MOCK_FOLDERS` hiển thị (vẫn dùng mock)
+- [ ] **Chưa:** Load folders từ DB
+- [ ] **Chưa:** Navigation đúng theo route active state
 
 ---
 
@@ -95,20 +100,12 @@ mastery_level = 5 → hoàn toàn thuộc
 Progress % = (số thẻ có mastery_level >= 4) / (tổng số thẻ) * 100
 ```
 
-#### Cập nhật StudySetCard
+#### Cập nhật StudySetCard với `progressPercent` và `last_accessed`
 ```tsx
-interface StudySetCardProps {
-  set: StudySet;
-  cardCount: number;         // Từ joined query
-  progressPercent: number;   // Tính từ DB
-  lastAccessed: string;      // ISO timestamp
-  onClick: (id: string) => void;
-  onPlayMatch: (id: string) => void;
-}
-
-// UI:
-<p className="text-xs text-slate-400">{cardCount} cards</p>
-<p className="text-xs text-slate-400">{relativeTime(lastAccessed)}</p>  // "2 hours ago"
+// Sau Phase 1, StudySetCard đã dùng set.progressPercent ?? 0
+// Phase 5 chỉ cần truyền đúng giá trị từ DB thay vì mock
+// Thêm hiển thị last_accessed:
+<p className="text-xs text-slate-400">{relativeTime(set.last_accessed)}</p>
 ```
 
 #### Hàm `relativeTime()`

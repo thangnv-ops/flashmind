@@ -15,8 +15,9 @@ Kết nối `SetEditor` và hệ thống folders với Supabase. Bổ sung tính
 - [x] Validation: không cho save nếu term/definition trống
 - [x] Sticky header khi scroll
 - [x] Nút "Import" mở BulkImportModal
-- [x] `handleSave()` hiện chỉ `console.log` rồi navigate về, **chưa lưu vào DB**
+- [x] `handleSave()` hiện chỉ `console.log` rồi navigate về, **chưa lưu vào DB** (dùng `useNavigate` từ Phase 1)
 - [x] Nút upload ảnh (ImageIcon) trong mỗi row — **chưa hoạt động**
+- [x] `useParams<{ setId }>()` đã có — `editSetId` sẵn sàng nhận khi edit mode
 
 ### BulkImportModal (`src/components/editor/BulkImportModal.tsx`) — Cơ bản
 - [x] Textarea nhận paste text
@@ -28,6 +29,7 @@ Kết nối `SetEditor` và hệ thống folders với Supabase. Bổ sung tính
 
 ### Dashboard — Folders section
 - [x] Hiển thị "Your Folders" nhưng chỉ có nút "New Folder" tĩnh
+- [x] MOCK_FOLDERS đã có `user_id`, `created_at` (cập nhật Phase 1)
 - [ ] **Chưa:** Load folders từ DB
 - [ ] **Chưa:** Tạo/Xóa folder
 - [ ] **Chưa:** Assign study set vào folder
@@ -38,7 +40,16 @@ Kết nối `SetEditor` và hệ thống folders với Supabase. Bổ sung tính
 
 ### 2.1 Kết nối SetEditor với Supabase
 
-#### Tạo `src/hooks/useStudySets.ts`
+#### Thêm routes mới vào `App.tsx` (đã có React Router từ Phase 1)
+
+> **Phase 1 đã setup React Router** với `ProtectedRoute` dùng `<Outlet>` pattern.
+> Để thêm routes mới, chỉ cần thêm `<Route>` vào group `<Route element={<ProtectedRoute />}>` trong `App.tsx`.
+
+Routes hiện có:
+```
+/editor          → SetEditor (create mode)
+/editor/:setId   → SetEditor (edit mode — useParams đã có, chưa load data)
+```
 ```ts
 // Custom hooks để thao tác với study_sets + flashcards
 export function useStudySets() {
@@ -186,6 +197,8 @@ Thay `MOCK_SETS` bằng data từ Supabase:
 //   ORDER BY last_accessed DESC
 //   LIMIT 6
 ```
+
+> **Lưu ý (từ Phase 1):** Field `set.flashcards` (không phải `set.cards`), `set.progressPercent` (không phải `set.progress`). `set.author` đã bị xóa — Sidebar và StudySetCard dùng email user từ `useAuth()`.
 
 Kết hợp với `flashcards count` trong cùng 1 query:
 ```sql

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { 
   Plus, 
   Trash2, 
@@ -18,7 +19,9 @@ interface CardRow {
   error?: string;
 }
 
-export const SetEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export const SetEditor: React.FC = () => {
+  const navigate = useNavigate();
+  const { setId: editSetId } = useParams<{ setId: string }>();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [rows, setRows] = useState<CardRow[]>([
@@ -70,8 +73,8 @@ export const SetEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       return;
     }
 
-    console.log('Saving set:', { title, description, cards: rows });
-    onBack();
+    console.log('Saving set:', { title, description, cards: rows, editSetId });
+    navigate('/dashboard');
   };
 
   const handleImport = (data: { term: string; definition: string }[]) => {
@@ -94,7 +97,7 @@ export const SetEditor: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       )}>
         <div className="max-w-5xl mx-auto px-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={onBack} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <div className={cn("transition-opacity", isSticky ? "opacity-100" : "opacity-0 pointer-events-none")}>
