@@ -1,14 +1,31 @@
-import React from 'react';
-import { MoreVertical, User, Play, LayoutGrid } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { MoreVertical, User, Play, LayoutGrid, Pencil, Trash2 } from 'lucide-react';
 import type { StudySet } from '../../types';
 
 interface StudySetCardProps {
   set: StudySet;
   onClick: (id: string) => void;
   onPlayMatch: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string) => void;
 }
 
-export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlayMatch }) => {
+export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlayMatch, onEdit, onDelete }) => {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+        setConfirmDelete(false);
+      }
+    };
+    if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
   return (
     <div 
       className="bg-white border rounded-xl p-5 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group relative flex flex-col h-full"
@@ -23,9 +40,54 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
               {set.flashcards?.length ?? 0} Cards
             </p>
           </div>
-          <button className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors">
-            <MoreVertical className="w-4 h-4" />
-          </button>
+          <div className="relative shrink-0" ref={menuRef}>
+            <button
+              onClick={e => { e.stopPropagation(); setMenuOpen(v => !v); setConfirmDelete(false); }}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-md hover:bg-slate-100 transition-colors"
+            >
+              <MoreVertical className="w-4 h-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-7 z-20 bg-white border rounded-xl shadow-lg py-1 w-40 text-sm">
+                {!confirmDelete ? (
+                  <>
+                    <button
+                      onClick={e => { e.stopPropagation(); setMenuOpen(false); onEdit?.(set.id); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 hover:bg-slate-50 text-slate-700 transition-colors"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
+                      className="w-full flex items-center gap-2 px-4 py-2 hover:bg-red-50 text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete
+                    </button>
+                  </>
+                ) : (
+                  <div className="px-4 py-3">
+                    <p className="text-xs text-slate-600 mb-3">Delete this set?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={e => { e.stopPropagation(); setMenuOpen(false); setConfirmDelete(false); onDelete?.(set.id); }}
+                        className="flex-1 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600 transition-colors"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); setConfirmDelete(false); }}
+                        className="flex-1 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2 mb-6">

@@ -10,26 +10,26 @@ Kết nối `SetEditor` và hệ thống folders với Supabase. Bổ sung tính
 ## Trạng thái hiện tại (Đã làm)
 
 ### SetEditor (`src/pages/SetEditor.tsx`) — UI hoàn chỉnh, chưa có DB
-- [x] Form nhập Title + Description
-- [x] Danh sách card rows (term + definition) có thể thêm/xóa động
-- [x] Validation: không cho save nếu term/definition trống
-- [x] Sticky header khi scroll
-- [x] Nút "Import" mở BulkImportModal
-- [x] `handleSave()` hiện chỉ `console.log` rồi navigate về, **chưa lưu vào DB** (dùng `useNavigate` từ Phase 1)
-- [x] Nút upload ảnh (ImageIcon) trong mỗi row — **chưa hoạt động**
-- [x] `useParams<{ setId }>()` đã có — `editSetId` sẵn sàng nhận khi edit mode
+Form nhập Title + Description
+Danh sách card rows (term + definition) có thể thêm/xóa động
+Validation: không cho save nếu term/definition trống
+Sticky header khi scroll
+Nút "Import" mở BulkImportModal
+`handleSave()` hiện chỉ `console.log` rồi navigate về, **chưa lưu vào DB** (dùng `useNavigate` từ Phase 1)
+Nút upload ảnh (ImageIcon) trong mỗi row — **chưa hoạt động**
+`useParams<{ setId }>()` đã có — `editSetId` sẵn sàng nhận khi edit mode
 
 ### BulkImportModal (`src/components/editor/BulkImportModal.tsx`) — Cơ bản
-- [x] Textarea nhận paste text
-- [x] Tự động parse theo dấu `,` `\t` `;`
-- [x] Preview 5 cards đầu tiên
-- [x] Callback `onImport(data)` trả về array `{term, definition}`
+Textarea nhận paste text
+Tự động parse theo dấu `,` `\t` `;`
+Preview 5 cards đầu tiên
+Callback `onImport(data)` trả về array `{term, definition}`
 - [ ] **Chưa:** Upload file CSV
 - [ ] **Chưa:** Kiểm tra trùng lặp khi import
 
 ### Dashboard — Folders section
-- [x] Hiển thị "Your Folders" nhưng chỉ có nút "New Folder" tĩnh
-- [x] MOCK_FOLDERS đã có `user_id`, `created_at` (cập nhật Phase 1)
+Hiển thị "Your Folders" nhưng chỉ có nút "New Folder" tĩnh
+MOCK_FOLDERS đã có `user_id`, `created_at` (cập nhật Phase 1)
 - [ ] **Chưa:** Load folders từ DB
 - [ ] **Chưa:** Tạo/Xóa folder
 - [ ] **Chưa:** Assign study set vào folder

@@ -1,30 +1,51 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  ChevronLeft, 
-  ChevronRight, 
-  Shuffle, 
-  Play, 
-  Pause, 
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Shuffle,
+  Play,
+  Pause,
   Settings,
   Maximize2,
-  Keyboard
+  Keyboard,
+  Loader2,
 } from 'lucide-react';
 import { FlipCard } from '../components/flashcards/FlipCard';
-import { MOCK_SETS } from '../mockData';
+import { useStudySets } from '../hooks/useStudySets';
+import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
 
 export const FlashcardView: React.FC = () => {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
-  const set = MOCK_SETS.find(s => s.id === setId) || MOCK_SETS[0];
+  const { getStudySet } = useStudySets();
+
+  const [setTitle, setSetTitle] = useState('');
+  const [allCards, setAllCards] = useState<Flashcard[]>([]);
+  const [loadingSet, setLoadingSet] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(false);
   const [isShuffled, setIsShuffled] = useState(false);
-  const [cards, setCards] = useState(set.flashcards ?? []);
+  const [cards, setCards] = useState<Flashcard[]>([]);
+
+  useEffect(() => {
+    if (!setId) return;
+    setLoadingSet(true);
+    getStudySet(setId).then(set => {
+      if (set) {
+        setSetTitle(set.title);
+        const fc = set.flashcards ?? [];
+        setAllCards(fc);
+        setCards(fc);
+      }
+      setLoadingSet(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setId]);
 
   const nextCard = useCallback(() => {
     setIsFlipped(false);
@@ -55,9 +76,9 @@ export const FlashcardView: React.FC = () => {
 
   const toggleShuffle = () => {
     if (isShuffled) {
-      setCards(set.flashcards ?? []);
+      setCards(allCards);
     } else {
-      setCards([...cards].sort(() => Math.random() - 0.5));
+      setCards([...allCards].sort(() => Math.random() - 0.5));
     }
     setIsShuffled(!isShuffled);
     setCurrentIndex(0);
@@ -95,6 +116,23 @@ export const FlashcardView: React.FC = () => {
     return () => clearInterval(timer);
   }, [isAutoPlaying, isFlipped, nextCard]);
 
+  if (loadingSet) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (cards.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+        <p className="text-slate-500 font-medium">No cards found in this set.</p>
+        <button onClick={() => navigate(-1)} className="text-primary font-bold hover:underline">Go back</button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
@@ -103,7 +141,7 @@ export const FlashcardView: React.FC = () => {
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
           <div>
-            <h2 className="font-bold text-slate-800">{set.title}</h2>
+            <h2 className="font-bold text-slate-800">{setTitle}</h2>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Flashcards Mode</p>
           </div>
         </div>

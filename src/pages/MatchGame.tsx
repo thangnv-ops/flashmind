@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  Timer, 
-  Trophy, 
+import {
+  ArrowLeft,
+  Timer,
+  Trophy,
   RotateCcw,
-  Play
+  Play,
+  Loader2,
 } from 'lucide-react';
-import { MOCK_SETS } from '../mockData';
+import { useStudySets } from '../hooks/useStudySets';
+import type { StudySet } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import confetti from 'canvas-confetti';
@@ -23,7 +25,10 @@ interface GameCard {
 export const MatchGame: React.FC = () => {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
-  const set = MOCK_SETS.find(s => s.id === setId) || MOCK_SETS[0];
+  const { getStudySet } = useStudySets();
+
+  const [studySet, setStudySet] = useState<StudySet | null>(null);
+  const [loadingSet, setLoadingSet] = useState(true);
   const [cards, setCards] = useState<GameCard[]>([]);
   const [selected, setSelected] = useState<GameCard | null>(null);
   const [time, setTime] = useState(0);
@@ -31,9 +36,20 @@ export const MatchGame: React.FC = () => {
   const [isFinished, setIsFinished] = useState(false);
   const timerRef = useRef<any>(null);
 
+  useEffect(() => {
+    if (!setId) return;
+    setLoadingSet(true);
+    getStudySet(setId).then(set => {
+      setStudySet(set);
+      setLoadingSet(false);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setId]);
+
   const initGame = useCallback(() => {
+    if (!studySet) return;
     const gameCards: GameCard[] = [];
-    (set.flashcards ?? []).forEach(card => {
+    (studySet.flashcards ?? []).forEach(card => {
       gameCards.push({
         id: `term-${card.id}`,
         content: card.term,
@@ -55,11 +71,11 @@ export const MatchGame: React.FC = () => {
     setIsActive(false);
     setIsFinished(false);
     setSelected(null);
-  }, [set]);
+  }, [studySet]);
 
   useEffect(() => {
-    initGame();
-  }, [initGame]);
+    if (studySet) initGame();
+  }, [initGame, studySet]);
 
   useEffect(() => {
     if (isActive && !isFinished) {
@@ -127,6 +143,23 @@ export const MatchGame: React.FC = () => {
     return `${seconds}.${milliseconds.toString().padStart(2, '0')}s`;
   };
 
+  if (loadingSet) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!studySet) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-900 text-white gap-4">
+        <p className="text-white/60 font-medium">Study set not found.</p>
+        <button onClick={() => navigate('/dashboard')} className="text-primary font-bold hover:underline">Back to Dashboard</button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col text-white">
       <header className="px-6 py-4 flex items-center justify-between border-b border-white/10 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
@@ -135,7 +168,7 @@ export const MatchGame: React.FC = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="font-bold">{set.title}</h2>
+            <h2 className="font-bold">{studySet.title}</h2>
             <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Match Game</p>
           </div>
         </div>

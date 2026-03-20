@@ -10,25 +10,25 @@ Xây dựng 3 chế độ học còn thiếu: **Learn (Multiple Choice)**, **Wri
 ## Trạng thái hiện tại (Đã làm)
 
 ### FlashcardView (`src/pages/FlashcardView.tsx`) — Gần hoàn chỉnh
-- [x] Hiển thị từng thẻ một với `FlipCard` component (CSS 3D Transform)
-- [x] Keyboard shortcuts: Space (flip), ArrowLeft/ArrowRight (prev/next)
-- [x] Shuffle cards (dùng `set.flashcards` — đã cập nhật Phase 1)
-- [x] Auto-play mode (tự lật & chuyển thẻ sau 3s)
-- [x] Progress bar ở cuối màn hình
-- [x] Confetti khi hoàn thành toàn bộ set
-- [x] `useNavigate` + `useParams` (không còn callback props sau Phase 1)
+-  Hiển thị từng thẻ một với `FlipCard` component (CSS 3D Transform)
+-  Keyboard shortcuts: Space (flip), ArrowLeft/ArrowRight (prev/next)
+-  Shuffle cards (dùng `set.flashcards` — đã cập nhật Phase 1)
+-  Auto-play mode (tự lật & chuyển thẻ sau 3s)
+-  Progress bar ở cuối màn hình
+-  Confetti khi hoàn thành toàn bộ set
+-  `useNavigate` + `useParams` (không còn callback props sau Phase 1)
 - [ ] **Chưa:** Starring (gắn sao) từng thẻ
 - [ ] **Chưa:** Filter "chỉ học thẻ gắn sao"
 - [ ] **Chưa:** Settings panel (Settings button có nhưng chưa hoạt động)
 
 ### FlipCard (`src/components/flashcards/FlipCard.tsx`) — Hoàn chỉnh
-- [x] CSS 3D flip animation với `motion` từ `motion/react`
-- [x] Spring animation: `stiffness: 260, damping: 20`
-- [x] Front: hiển thị Term, Back: hiển thị Definition (màu primary)
+-  CSS 3D flip animation với `motion` từ `motion/react`
+-  Spring animation: `stiffness: 260, damping: 20`
+-  Front: hiển thị Term, Back: hiển thị Definition (màu primary)
 
 ### StudySetCard — Chưa có nút dẫn vào Learn/Write mode
-- [x] Nút "Flashcards" → FlashcardView
-- [x] Nút "Match" → MatchGame
+-  Nút "Flashcards" → FlashcardView
+-  Nút "Match" → MatchGame
 - [ ] **Chưa:** Nút "Learn" → LearnMode
 - [ ] **Chưa:** Nút "Write" → WriteMode
 
