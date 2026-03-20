@@ -78,7 +78,9 @@ export function useStudySession(setId: string | undefined, mode: StudyMode) {
       isSavingRef.current = true;
       setIsSaving(true);
 
-      const results = [...resultsRef.current];
+      let results: CardResult[];
+      try {
+      results = [...resultsRef.current];
 
       // Keep only the last result per card (card may appear multiple times)
       const lastResultMap = new Map<string, boolean>();
@@ -162,11 +164,15 @@ export function useStudySession(setId: string | undefined, mode: StudyMode) {
           .eq('id', sessionIdRef.current);
       }
 
-      resultsRef.current = [];
-      setResultsCount(0);
-      isSavingRef.current = false;
-      setIsSaving(false);
-      localStorage.removeItem(`quizi_session_${setId}`);
+        resultsRef.current = [];
+        setResultsCount(0);
+        localStorage.removeItem(`quizi_session_${setId}`);
+      } catch (err) {
+        console.error('[useStudySession] saveToDB failed:', err);
+      } finally {
+        isSavingRef.current = false;
+        setIsSaving(false);
+      }
     },
     [setId, user?.id],
   );

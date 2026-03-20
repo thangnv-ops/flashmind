@@ -37,6 +37,7 @@ export const WriteMode: React.FC = () => {
   const [results, setResults] = useState<boolean[]>([]);    // one per card: correct?
   const [isFinished, setIsFinished] = useState(false);
   const [wrongAttempts, setWrongAttempts] = useState(0);
+  const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear auto-next timer on unmount
@@ -81,6 +82,7 @@ export const WriteMode: React.FC = () => {
       autoNextTimerRef.current = null;
     }
     setWrongAttempts(0);
+    setRevealedIndices(new Set());
     if (currentIdx < cards.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setUserInput('');
@@ -110,7 +112,17 @@ export const WriteMode: React.FC = () => {
         setResults(prev => [...prev, false]);
         recordResult(currentCard.id, false);
       }
-      setWrongAttempts(prev => prev + 1);
+      const nextWrongCount = wrongAttempts + 1;
+      setWrongAttempts(nextWrongCount);
+      // Reveal one new random character as hint
+      setRevealedIndices(prev => {
+        const term = currentCard.term;
+        const unrevealed = Array.from({ length: term.length }, (_, i) => i)
+          .filter(i => term[i] !== ' ' && !prev.has(i));
+        if (unrevealed.length === 0) return prev;
+        const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
+        return new Set([...prev, pick]);
+      });
       // Reset to idle after 0.8s so user can try again
       autoNextTimerRef.current = setTimeout(() => {
         setStatus('idle');
@@ -147,6 +159,7 @@ export const WriteMode: React.FC = () => {
       autoNextTimerRef.current = null;
     }
     setWrongAttempts(0);
+    setRevealedIndices(new Set());
     setCards(prev => [...prev].sort(() => Math.random() - 0.5));
     setCurrentIdx(0);
     setUserInput('');
@@ -243,8 +256,18 @@ export const WriteMode: React.FC = () => {
           {resultsCount > 0 && (
             <button
               onClick={async () => {
-                await pauseSession(cards.length);
-                navigate(`/sets/${setId}`);
+                // Cancel any pending auto-advance timer before saving
+                if (autoNextTimerRef.current) {
+                  clearTimeout(autoNextTimerRef.current);
+                  autoNextTimerRef.current = null;
+                }
+                try {
+                  await pauseSession(cards.length);
+                } catch {
+                  // save failed but still navigate away
+                } finally {
+                  navigate(`/sets/${setId}`);
+                }
               }}
               disabled={isSaving}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 border rounded-lg transition-colors disabled:opacity-50"
@@ -292,9 +315,22 @@ export const WriteMode: React.FC = () => {
             )}
 
             {wrongAttempts > 0 && status === 'idle' && (
-              <p className="text-xs text-red-400 font-semibold -mt-1">
-                ✗ {wrongAttempts} lần sai — thử lại
-              </p>
+              <div className="flex flex-col gap-1 -mt-1">
+                <p className="text-xs text-red-400 font-semibold">
+                  ✗ {wrongAttempts} lần sai — thử lại
+                </p>
+                <div className="flex flex-wrap gap-1 text-sm font-mono">
+                  {Array.from(currentCard.term).map((char, i) =>
+                    char === ' ' ? (
+                      <span key={i} className="w-3" />
+                    ) : revealedIndices.has(i) ? (
+                      <span key={i} className="text-amber-500 font-bold">{char}</span>
+                    ) : (
+                      <span key={i} className="text-slate-300">_</span>
+                    )
+                  )}
+                </div>
+              </div>
             )}
             <div className="flex gap-3">
               {status === 'idle' ? (
