@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  ArrowRight,
   Trophy,
   RotateCcw,
   Loader2,
@@ -37,6 +36,15 @@ export const WriteMode: React.FC = () => {
   const [status, setStatus] = useState<AnswerStatus>('idle');
   const [results, setResults] = useState<boolean[]>([]);    // one per card: correct?
   const [isFinished, setIsFinished] = useState(false);
+  const [wrongAttempts, setWrongAttempts] = useState(0);
+  const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear auto-next timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoNextTimerRef.current) clearTimeout(autoNextTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!setId) return;
@@ -67,16 +75,12 @@ export const WriteMode: React.FC = () => {
 
   const currentCard = cards[currentIdx];
 
-  const handleCheck = () => {
-    if (status !== 'idle' || !userInput.trim()) return;
-    const result = checkAnswer(userInput, currentCard.term);
-    const isCorrect = result === 'correct' || result === 'almost';
-    setStatus(result);
-    setResults(prev => [...prev, isCorrect]);
-    recordResult(currentCard.id, isCorrect);
-  };
-
-  const handleNext = () => {
+  const advanceCard = () => {
+    if (autoNextTimerRef.current) {
+      clearTimeout(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
+    setWrongAttempts(0);
     if (currentIdx < cards.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setUserInput('');
@@ -87,26 +91,62 @@ export const WriteMode: React.FC = () => {
     }
   };
 
+  const handleCheck = () => {
+    if (status !== 'idle' || !userInput.trim()) return;
+    const result = checkAnswer(userInput, currentCard.term);
+    const isCorrect = result === 'correct' || result === 'almost';
+    setStatus(result);
+    if (isCorrect) {
+      // Only record on the first attempt
+      if (wrongAttempts === 0) {
+        setResults(prev => [...prev, true]);
+        recordResult(currentCard.id, true);
+      }
+      // Auto-advance after 1 second
+      autoNextTimerRef.current = setTimeout(advanceCard, 1000);
+    } else {
+      // Record wrong only on first attempt
+      if (wrongAttempts === 0) {
+        setResults(prev => [...prev, false]);
+        recordResult(currentCard.id, false);
+      }
+      setWrongAttempts(prev => prev + 1);
+      // Reset to idle after 0.8s so user can try again
+      autoNextTimerRef.current = setTimeout(() => {
+        setStatus('idle');
+        setUserInput('');
+      }, 800);
+    }
+  };
+
+  const handleNext = () => advanceCard();
+
   const handleOverride = () => {
+    if (autoNextTimerRef.current) {
+      clearTimeout(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
     setResults(prev => {
       const updated = [...prev];
       updated[updated.length - 1] = true;
       return updated;
     });
     setStatus('overridden');
+    autoNextTimerRef.current = setTimeout(advanceCard, 1000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      if (status === 'idle') {
-        handleCheck();
-      } else {
-        handleNext();
-      }
+    if (e.key === 'Enter' && status === 'idle') {
+      handleCheck();
     }
   };
 
   const handleStudyAgain = () => {
+    if (autoNextTimerRef.current) {
+      clearTimeout(autoNextTimerRef.current);
+      autoNextTimerRef.current = null;
+    }
+    setWrongAttempts(0);
     setCards(prev => [...prev].sort(() => Math.random() - 0.5));
     setCurrentIdx(0);
     setUserInput('');
@@ -175,7 +215,7 @@ export const WriteMode: React.FC = () => {
   const feedback: { text: string; color: string } | null = {
     correct: { text: 'Correct! ✓', color: 'text-green-600' },
     almost: { text: `Almost! Correct answer: "${currentCard.term}"`, color: 'text-amber-600' },
-    wrong: { text: `Incorrect. Answer: "${currentCard.term}"`, color: 'text-red-600' },
+    wrong: { text: 'Incorrect! Try again.', color: 'text-red-600' },
     overridden: { text: 'Marked as correct.', color: 'text-green-600' },
     idle: null,
   }[status];
@@ -251,6 +291,11 @@ export const WriteMode: React.FC = () => {
               <p className={cn('text-sm font-semibold', feedback.color)}>{feedback.text}</p>
             )}
 
+            {wrongAttempts > 0 && status === 'idle' && (
+              <p className="text-xs text-red-400 font-semibold -mt-1">
+                ✗ {wrongAttempts} lần sai — thử lại
+              </p>
+            )}
             <div className="flex gap-3">
               {status === 'idle' ? (
                 <button
@@ -260,27 +305,17 @@ export const WriteMode: React.FC = () => {
                 >
                   Check Answer
                 </button>
+              ) : status === 'wrong' ? (
+                <button
+                  onClick={handleOverride}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
+                >
+                  Override: I got it
+                </button>
               ) : (
-                <>
-                  {status === 'wrong' && (
-                    <button
-                      onClick={handleOverride}
-                      className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors text-sm"
-                    >
-                      Override: I got it
-                    </button>
-                  )}
-                  <button
-                    onClick={handleNext}
-                    className="flex-1 py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-colors flex items-center justify-center gap-2"
-                  >
-                    {currentIdx < cards.length - 1 ? (
-                      <>Next <ArrowRight className="w-4 h-4" /></>
-                    ) : (
-                      'See Results'
-                    )}
-                  </button>
-                </>
+                <p className="flex-1 py-3 text-sm text-center text-slate-400">
+                  Chuyển tiếp tự động...
+                </p>
               )}
             </div>
           </div>
