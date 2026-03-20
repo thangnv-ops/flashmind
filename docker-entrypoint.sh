@@ -16,6 +16,7 @@ replace() {
   find "$DIST" -name "*.js" -exec sed -i "s|${placeholder}|${value}|g" {} +
 }
 
+replace "PLACEHOLDER_APP_URL"            "${VITE_APP_URL}"
 replace "PLACEHOLDER_SUPABASE_URL"       "${VITE_SUPABASE_URL}"
 replace "PLACEHOLDER_SUPABASE_ANON_KEY"  "${VITE_SUPABASE_ANON_KEY}"
 replace "PLACEHOLDER_MINIO_ENDPOINT"     "${VITE_MINIO_ENDPOINT:-}"
