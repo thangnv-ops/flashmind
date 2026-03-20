@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -71,14 +71,14 @@ export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
 export function useToast() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = (message: string, type: ToastType = 'info') => {
+  const addToast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substr(2, 9);
     setToasts(prev => [...prev, { id, type, message }]);
-  };
+  }, []);
 
-  const dismiss = (id: string) => {
+  const dismiss = useCallback((id: string) => {
     setToasts(prev => prev.filter(t => t.id !== id));
-  };
+  }, []);
 
   return { toasts, addToast, dismiss };
 }

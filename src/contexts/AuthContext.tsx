@@ -38,17 +38,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Load existing session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Use onAuthStateChange only — do NOT call getSession() separately.
+    // The INITIAL_SESSION event fires after Supabase has fully resolved the
+    // initial auth state, including PKCE OAuth code exchange from the URL.
+    // Calling getSession() first creates a race condition where loading is set
+    // to false before the OAuth callback is processed, causing ProtectedRoute
+    // to redirect to /auth prematurely.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+      if (event === 'INITIAL_SESSION') {
+        setLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
