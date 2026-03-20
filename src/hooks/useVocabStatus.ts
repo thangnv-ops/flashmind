@@ -24,7 +24,10 @@ export function useVocabStatus(setId: string | undefined) {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!setId) return;
+    if (!setId) {
+      setLoading(false);
+      return;
+    }
 
     if (isMockMode) {
       const set = MOCK_SETS.find(s => s.id === setId);
@@ -85,11 +88,14 @@ export function useVocabStatus(setId: string | undefined) {
     fetchData();
   }, [fetchData]);
 
-  // Re-fetch when user returns to this page (e.g. navigates back from a study mode)
+  // Re-fetch when user returns to this tab/page (handles tab switch + bfcache restore).
+  // visibilitychange is more reliable than window.focus for SPA + browser tab switching.
   useEffect(() => {
-    const onFocus = () => fetchData();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchData();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchData]);
 
   return { groups, loading, refetch: fetchData };

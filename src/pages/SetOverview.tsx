@@ -24,6 +24,7 @@ import { relativeTime } from '../utils/time';
 import { VocabStatusPanel } from '../components/progress/VocabStatusPanel';
 import { DailyProgressChart } from '../components/progress/DailyProgressChart';
 import { MasteryBadge } from '../components/progress/MasteryBadge';
+import { useLearningQueue } from '../hooks/useLearningQueue';
 import type { StudySet } from '../types';
 
 const MODES = [
@@ -79,6 +80,7 @@ export const SetOverview: React.FC = () => {
   const { user } = useAuth();
   const { dueCards, totalDue } = useReviewQueue(setId);
   const { groups: vocabGroups, loading: vocabLoading } = useVocabStatus(setId);
+  const { sessionTotal: queueTotal, loading: queueCountLoading } = useLearningQueue(setId);
 
   const [set, setSet] = useState<StudySet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,9 +189,13 @@ export const SetOverview: React.FC = () => {
             <BookOpen className="w-4 h-4 text-primary" />
             <span className="font-semibold text-slate-700">{cardCount} cards</span>
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg">
-            <div className="w-3 h-3 rounded-full bg-emerald-400" />
-            <span className="font-semibold text-slate-700">{liveMastered} / {liveTotal || cardCount} đã thành thạo</span>
+          <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg min-w-[140px]">
+            <div className="w-3 h-3 rounded-full bg-emerald-400 shrink-0" />
+            {vocabLoading ? (
+              <span className="h-4 w-24 bg-slate-200 rounded animate-pulse inline-block" />
+            ) : (
+              <span className="font-semibold text-slate-700">{liveMastered} / {liveTotal || cardCount} đã thành thạo</span>
+            )}
           </div>
           {matchBest !== null && (
             <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg">
@@ -260,12 +266,18 @@ export const SetOverview: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {MODES.map(mode => {
               const Icon = mode.icon;
+              const showBadge = !queueCountLoading && queueTotal > 0 && (mode.key === 'learn' || mode.key === 'write');
               return (
                 <button
                   key={mode.key}
                   onClick={() => navigate(mode.path(set.id))}
-                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${mode.color}`}
+                  className={`relative flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${mode.color}`}
                 >
+                  {showBadge && (
+                    <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold shadow">
+                      {queueTotal}
+                    </span>
+                  )}
                   <div className="shrink-0 mt-0.5">
                     <Icon className="w-5 h-5" />
                   </div>

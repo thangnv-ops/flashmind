@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -21,6 +21,8 @@ import type { MCQuestion } from '../utils/questionGenerator';
 import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
+import { useLearningQueue } from '../hooks/useLearningQueue';
+import { QueueIndicator } from '../components/progress/QueueIndicator';
 
 export const LearnMode: React.FC = () => {
   const navigate = useNavigate();
@@ -29,6 +31,22 @@ export const LearnMode: React.FC = () => {
   useUpdateLastAccessed(setId);
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'learn');
   const { submitAnswer } = useProgressUpdater();
+
+  const {
+    queue,
+    counts,
+    correctCardIds: queueCorrectIds,
+    sessionTotal,
+    loading: queueLoading,
+    answerCorrect: queueAnswerCorrect,
+    answerWrong: queueAnswerWrong,
+    refetch: refetchQueue,
+    newCardsToday,
+    dailyNewLimit,
+  } = useLearningQueue(setId);
+
+  // Tracks unique card IDs answered correctly this session (ref for sync checks in closure)
+  const uniqueCorrectRef = useRef<Set<string>>(new Set());
 
   const [setTitle, setSetTitle] = useState('');
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -51,20 +69,29 @@ export const LearnMode: React.FC = () => {
     getStudySet(setId).then(set => {
       if (set) {
         setSetTitle(set.title);
-        const cards = set.flashcards ?? [];
-        setAllCards(cards);
-        setQuestions(generateMCQuestions(cards));
+        setAllCards(set.flashcards ?? []);
       }
       setLoadingSet(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId]);
 
+  // Once both the flashcard pool and the smart queue are ready, generate MCQ for this session.
+  // Uses allCards as the distractor pool so choices remain meaningful even with a 10-card queue.
+  useEffect(() => {
+    if (queueLoading || allCards.length < 4 || queue.length === 0) return;
+    if (questions.length > 0) return; // already generated — don't clobber
+    const sessionCardIds = new Set(queue.map(c => c.id));
+    const sessionQs = generateMCQuestions(allCards).filter(q => sessionCardIds.has(q.cardId));
+    setQuestions(sessionQs);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueLoading, queue, allCards]);
+
   const handleChoiceSelect = useCallback((choice: string) => {
     if (isAnswered) return;
     const current = questions[currentIdx];
+    if (!current) return;
     const isCorrect = choice === current.correctAnswer;
-    const newCorrectCount = isCorrect ? correctCount + 1 : correctCount;
 
     setSelectedChoice(choice);
     setIsAnswered(true);
@@ -80,34 +107,47 @@ export const LearnMode: React.FC = () => {
 
     if (isCorrect) {
       setCorrectCount(prev => prev + 1);
+      // Track unique correct cards synchronously via ref (needed for closure check below)
+      if (!uniqueCorrectRef.current.has(current.cardId)) {
+        uniqueCorrectRef.current = new Set([...uniqueCorrectRef.current, current.cardId]);
+      }
+      queueAnswerCorrect(current.cardId);
     } else {
       setWrongCardIds(prev => new Set([...prev, current.cardId]));
+      queueAnswerWrong(current.cardId);
+      // Intensive loop: push a copy of this question to the END of the queue.
+      // The user must answer it correctly before the session can end.
+      setQuestions(prev => [...prev, { ...prev[currentIdx] }]);
     }
 
     setTimeout(() => {
-      if (currentIdx < questions.length - 1) {
+      // Session ends only when ALL original cards have been answered correctly at least once.
+      const allDone = sessionTotal > 0 && uniqueCorrectRef.current.size >= sessionTotal;
+      if (allDone) {
+        setIsFinished(true);
+        finishSession(sessionTotal);
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2563eb', '#10b981', '#f59e0b'] });
+      } else {
         setCurrentIdx(prev => prev + 1);
         setSelectedChoice(null);
         setIsAnswered(false);
         setLastAnswerCorrect(null);
-      } else {
-        setIsFinished(true);
-        finishSession(questions.length);
-        if (newCorrectCount === questions.length) {
-          confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2563eb', '#10b981', '#f59e0b'] });
-        }
       }
     }, 1200);
-  }, [isAnswered, questions, currentIdx, correctCount, setId, submitAnswer, recordResult, finishSession]);
+  }, [isAnswered, questions, currentIdx, setId, submitAnswer, recordResult, finishSession, sessionTotal, queueAnswerCorrect, queueAnswerWrong]);
 
   const handleStudyAgain = () => {
-    setQuestions(generateMCQuestions([...allCards]));
+    // Reset local session state and re-run the queue algorithm for a fresh smart session
+    setQuestions([]);
     setCurrentIdx(0);
     setSelectedChoice(null);
     setIsAnswered(false);
     setCorrectCount(0);
     setWrongCardIds(new Set());
+    setMasteryUpdates({});
     setIsFinished(false);
+    uniqueCorrectRef.current = new Set();
+    refetchQueue();
   };
 
   const handleStudyMissed = () => {
@@ -121,7 +161,7 @@ export const LearnMode: React.FC = () => {
     setIsFinished(false);
   };
 
-  if (loadingSet) {
+  if (loadingSet || queueLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -134,6 +174,37 @@ export const LearnMode: React.FC = () => {
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <p className="text-slate-500 font-medium">No cards in this set.</p>
         <button onClick={() => navigate(-1)} className="text-primary font-bold hover:underline">Go back</button>
+      </div>
+    );
+  }
+
+  // Queue is empty after loading = daily new-card cap reached + no reviews due
+  if (!queueLoading && queue.length === 0) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Bạn đã hoàn thành bài học hôm nay!</h2>
+          <p className="text-slate-500 mb-1">
+            Đã học <span className="font-bold text-primary">{newCardsToday}</span> từ mới hôm nay
+            {newCardsToday >= dailyNewLimit && ` — đã đạt giới hạn ${dailyNewLimit} từ/ngày`}.
+          </p>
+          <p className="text-slate-400 text-sm mb-8">Không có từ nào cần ôn tập lúc này. Quủ tiết kiệm trí não đang được bảo vệ → hãy thử lại vào buổi tối hoặc ngày mai!</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => navigate(`/flashcards/${setId}`)}
+              className="w-full py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-colors"
+            >
+              Xem Flashcard
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+            >
+              Quay lại
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -158,8 +229,19 @@ export const LearnMode: React.FC = () => {
     );
   }
 
+  // questions[] is populated asynchronously after the queue resolves.
+  // Show a spinner rather than crashing while we wait.
+  if (questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (isFinished) {
-    const percent = Math.round((correctCount / questions.length) * 100);
+    const total = sessionTotal || questions.length;
+    const percent = Math.round((correctCount / Math.max(total, 1)) * 100);
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
@@ -167,7 +249,7 @@ export const LearnMode: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-800 mb-2">
             {percent >= 80 ? 'Great job!' : 'Keep practicing!'}
           </h2>
-          <p className="text-5xl font-bold text-primary mb-1">{correctCount} / {questions.length}</p>
+          <p className="text-5xl font-bold text-primary mb-1">{correctCount} / {sessionTotal || questions.length}</p>
           <p className="text-sm text-slate-400 mb-8">{percent}% correct</p>
           <div className="flex flex-col gap-3">
             <button
@@ -199,6 +281,15 @@ export const LearnMode: React.FC = () => {
 
   const currentQuestion = questions[currentIdx];
 
+  // Safety: if currentIdx somehow goes out of bounds (e.g. between setState batches)
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   const getChoiceStyle = (choice: string) => {
     if (!isAnswered) return 'bg-white border-2 border-slate-200 text-slate-700 hover:border-primary/60 hover:bg-primary/5 cursor-pointer';
     if (choice === currentQuestion.correctAnswer) return 'bg-green-50 border-2 border-green-400 text-green-700';
@@ -227,10 +318,16 @@ export const LearnMode: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <QueueIndicator
+            counts={counts}
+            completed={queueCorrectIds.size}
+            total={sessionTotal}
+            className="hidden sm:flex"
+          />
           {resultsCount > 0 && (
             <button
               onClick={async () => {
-                await pauseSession(questions.length);
+                await pauseSession(sessionTotal || questions.length);
                 navigate(`/sets/${setId}`);
               }}
               disabled={isSaving}
@@ -241,7 +338,7 @@ export const LearnMode: React.FC = () => {
             </button>
           )}
           <span className="text-sm font-bold text-slate-500 tabular-nums">
-            {currentIdx + 1} / {questions.length}
+            {Math.min(currentIdx + 1, sessionTotal || questions.length)} / {sessionTotal || questions.length}
           </span>
         </div>
       </header>

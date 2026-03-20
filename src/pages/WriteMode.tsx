@@ -20,6 +20,8 @@ import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
 import { MasteryDots } from '../components/progress/MasteryDots';
 import { MasteryBadge } from '../components/progress/MasteryBadge';
+import { useLearningQueue } from '../hooks/useLearningQueue';
+import { QueueIndicator } from '../components/progress/QueueIndicator';
 
 type AnswerStatus = 'idle' | 'correct' | 'almost' | 'wrong' | 'overridden';
 
@@ -31,6 +33,18 @@ export const WriteMode: React.FC = () => {
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'write');
   const { submitAnswer } = useProgressUpdater();
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    queue,
+    counts,
+    correctCardIds: queueCorrectIds,
+    sessionTotal,
+    loading: queueLoading,
+    answerCorrect: queueAnswerCorrect,
+    refetch: refetchQueue,
+    newCardsToday,
+    dailyNewLimit,
+  } = useLearningQueue(setId);
 
   const [setTitle, setSetTitle] = useState('');
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -56,14 +70,20 @@ export const WriteMode: React.FC = () => {
     if (!setId) return;
     setLoadingSet(true);
     getStudySet(setId).then(set => {
-      if (set) {
-        setSetTitle(set.title);
-        setCards((set.flashcards ?? []).sort(() => Math.random() - 0.5));
-      }
+      if (set) setSetTitle(set.title);
       setLoadingSet(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId]);
+
+  // Populate session cards from the smart queue once it's ready.
+  // Queue provides the 40/40/20 prioritised selection (max 20 new cards/day).
+  useEffect(() => {
+    if (queueLoading || queue.length === 0) return;
+    if (cards.length > 0) return; // already set — don't clobber
+    setCards(queue as Flashcard[]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueLoading, queue]);
 
   // Auto-focus input when moving to next card
   useEffect(() => {
@@ -86,6 +106,8 @@ export const WriteMode: React.FC = () => {
       clearTimeout(autoNextTimerRef.current);
       autoNextTimerRef.current = null;
     }
+    // Mark card as correctly answered in the queue (updates QueueIndicator counts)
+    if (currentCard) queueAnswerCorrect(currentCard.id);
     setWrongAttempts(0);
     setRevealedIndices(new Set());
     if (currentIdx < cards.length - 1) {
@@ -94,7 +116,7 @@ export const WriteMode: React.FC = () => {
       setStatus('idle');
     } else {
       setIsFinished(true);
-      finishSession(cards.length);
+      finishSession(sessionTotal || cards.length);
     }
   };
 
@@ -171,15 +193,17 @@ export const WriteMode: React.FC = () => {
     }
     setWrongAttempts(0);
     setRevealedIndices(new Set());
-    setCards(prev => [...prev].sort(() => Math.random() - 0.5));
+    setCards([]);
     setCurrentIdx(0);
     setUserInput('');
     setStatus('idle');
     setResults([]);
+    setMasteryUpdates({});
     setIsFinished(false);
+    refetchQueue();
   };
 
-  if (loadingSet) {
+  if (loadingSet || queueLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -188,17 +212,48 @@ export const WriteMode: React.FC = () => {
   }
 
   if (cards.length === 0) {
+    // Queue still populating — wait
+    if (queueLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+    // Queue loaded but empty = daily cap reached + no reviews due
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
-        <p className="text-slate-500 font-medium">No cards in this set.</p>
-        <button onClick={() => navigate(-1)} className="text-primary font-bold hover:underline">Go back</button>
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Bạn đã hoàn thành bài học hôm nay!</h2>
+          <p className="text-slate-500 mb-1">
+            Đã học <span className="font-bold text-primary">{newCardsToday}</span> từ mới hôm nay
+            {newCardsToday >= dailyNewLimit && ` — đã đạt giới hạn ${dailyNewLimit} từ/ngày`}.
+          </p>
+          <p className="text-slate-400 text-sm mb-8">Không có từ nào cần ôn tập lúc này. Quỹ tiết kiệm trí não đang được bảo vệ → hãy thử lại vào buổi tối hoặc ngày mai!</p>
+          <div className="flex flex-col gap-3">
+            <button
+              onClick={() => navigate(`/flashcards/${setId}`)}
+              className="w-full py-3 bg-primary text-white rounded-xl font-bold hover:bg-primary-dark transition-colors"
+            >
+              Xem Flashcard
+            </button>
+            <button
+              onClick={() => navigate(-1)}
+              className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
+            >
+              Quay lại
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isFinished) {
     const correctCount = results.filter(Boolean).length;
-    const percent = Math.round((correctCount / cards.length) * 100);
+    const total = sessionTotal || cards.length;
+    const percent = Math.round((correctCount / Math.max(total, 1)) * 100);
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
         <div className="bg-white rounded-3xl shadow-xl p-8 w-full max-w-md text-center">
@@ -206,7 +261,7 @@ export const WriteMode: React.FC = () => {
           <h2 className="text-2xl font-bold text-slate-800 mb-2">
             {percent >= 80 ? 'Well done!' : 'Keep going!'}
           </h2>
-          <p className="text-5xl font-bold text-primary mb-1">{correctCount} / {cards.length}</p>
+          <p className="text-5xl font-bold text-primary mb-1">{correctCount} / {sessionTotal || cards.length}</p>
           <p className="text-sm text-slate-400 mb-8">{percent}% correct</p>
           <div className="flex flex-col gap-3">
             <button
@@ -249,7 +304,7 @@ export const WriteMode: React.FC = () => {
       <div className="h-1.5 w-full bg-slate-200">
         <div
           className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${(currentIdx / cards.length) * 100}%` }}
+          style={{ width: `${(currentIdx / (sessionTotal || cards.length)) * 100}%` }}
         />
       </div>
 
@@ -264,6 +319,12 @@ export const WriteMode: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          <QueueIndicator
+            counts={counts}
+            completed={queueCorrectIds.size}
+            total={sessionTotal}
+            className="hidden sm:flex"
+          />
           {resultsCount > 0 && (
             <button
               onClick={async () => {
@@ -273,7 +334,7 @@ export const WriteMode: React.FC = () => {
                   autoNextTimerRef.current = null;
                 }
                 try {
-                  await pauseSession(cards.length);
+                  await pauseSession(sessionTotal || cards.length);
                 } catch {
                   // save failed but still navigate away
                 } finally {
@@ -288,7 +349,7 @@ export const WriteMode: React.FC = () => {
             </button>
           )}
           <span className="text-sm font-bold text-slate-500 tabular-nums">
-            {currentIdx + 1} / {cards.length}
+            {currentIdx + 1} / {sessionTotal || cards.length}
           </span>
         </div>
       </header>
