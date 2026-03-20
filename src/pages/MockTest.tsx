@@ -9,8 +9,10 @@ import {
   RotateCcw,
   Loader2,
   Send,
+  PauseCircle,
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
+import { useStudySession } from '../hooks/useStudySession';
 import { generateTest } from '../utils/questionGenerator';
 import { checkAnswer } from '../utils/levenshtein';
 import type { TestQuestion } from '../utils/questionGenerator';
@@ -29,6 +31,7 @@ export const MockTest: React.FC = () => {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
+  const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'test');
   const writeInputRef = useRef<HTMLInputElement>(null);
 
   const [setTitle, setSetTitle] = useState('');
@@ -83,6 +86,7 @@ export const MockTest: React.FC = () => {
     setCurrentAnswered(true);
     setCurrentCorrect(isCorrect);
     setResponses(prev => [...prev, { answered: true, correct: isCorrect, userAnswer: choice }]);
+    recordResult(currentQuestion.cardId, isCorrect);
   };
 
   const handleWriteCheck = () => {
@@ -93,6 +97,7 @@ export const MockTest: React.FC = () => {
     setCurrentAnswered(true);
     setCurrentCorrect(isCorrect);
     setResponses(prev => [...prev, { answered: true, correct: isCorrect, userAnswer: writeInput }]);
+    recordResult(currentQuestion.cardId, isCorrect);
   };
 
   const handleNext = () => {
@@ -105,6 +110,7 @@ export const MockTest: React.FC = () => {
       setCurrentWriteStatus(null);
     } else {
       setIsFinished(true);
+      finishSession(questions.length);
     }
   };
 
@@ -250,12 +256,25 @@ export const MockTest: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {resultsCount > 0 && (
+            <button
+              onClick={async () => {
+                await pauseSession(questions.length);
+                navigate(`/sets/${setId}`);
+              }}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 border rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PauseCircle className="w-3.5 h-3.5" />}
+              Lưu & Thoát
+            </button>
+          )}
           <span className="text-sm font-bold text-slate-500 tabular-nums">
             {currentIdx + 1} / {questions.length}
           </span>
           {!currentAnswered && currentIdx === questions.length - 1 && (
             <button
-              onClick={() => setIsFinished(true)}
+              onClick={() => { setIsFinished(true); finishSession(questions.length); }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
             >
               <Send className="w-3.5 h-3.5" />

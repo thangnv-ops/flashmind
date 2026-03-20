@@ -1,3 +1,18 @@
+export type StudyMode = 'flashcard' | 'learn' | 'write' | 'test' | 'match';
+
+export interface StudySession {
+  id: string;
+  user_id: string;
+  set_id: string;
+  mode: StudyMode;
+  cards_total: number;
+  cards_done: number;
+  cards_correct: number;
+  started_at: string;
+  ended_at: string | null;
+  is_complete: boolean;
+}
+
 export interface Flashcard {
   id: string;
   set_id: string;

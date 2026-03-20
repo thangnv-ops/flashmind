@@ -9,7 +9,8 @@ import { useFolders } from '../hooks/useFolders';
 import { useAuth } from '../contexts/AuthContext';
 import type { StudySet } from '../types';
 import type { FolderWithCount } from '../hooks/useFolders';
-import { Plus, Clock, Filter, FolderPlus, Loader2, X, ChevronDown } from 'lucide-react';
+import { Plus, Clock, Filter, FolderPlus, Loader2, X, ChevronDown, BarChart2 } from 'lucide-react';
+import { DailyProgressChart } from '../components/progress/DailyProgressChart';
 import { StudySetCardSkeleton } from '../components/ui/Skeleton';
 
 export const Dashboard: React.FC = () => {
@@ -254,7 +255,14 @@ export const Dashboard: React.FC = () => {
         </div>
       </section>
 
-
+      {/* Daily progress chart */}
+      <section className="mb-12">
+        <div className="flex items-center gap-2 mb-6">
+          <BarChart2 className="w-5 h-5 text-primary" />
+          <h2 className="text-xl font-bold text-slate-800">Tiến trình học</h2>
+        </div>
+        <DailyProgressChart />
+      </section>
 
       <section>
         <div className="flex items-center justify-between mb-6">

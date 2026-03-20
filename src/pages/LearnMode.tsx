@@ -8,9 +8,11 @@ import {
   Trophy,
   Loader2,
   AlertTriangle,
+  PauseCircle,
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
+import { useStudySession } from '../hooks/useStudySession';
 import { generateMCQuestions } from '../utils/questionGenerator';
 import type { MCQuestion } from '../utils/questionGenerator';
 import type { Flashcard } from '../types';
@@ -22,6 +24,7 @@ export const LearnMode: React.FC = () => {
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
+  const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'learn');
 
   const [setTitle, setSetTitle] = useState('');
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -57,6 +60,7 @@ export const LearnMode: React.FC = () => {
 
     setSelectedChoice(choice);
     setIsAnswered(true);
+    recordResult(current.cardId, isCorrect);
 
     if (isCorrect) {
       setCorrectCount(prev => prev + 1);
@@ -71,6 +75,7 @@ export const LearnMode: React.FC = () => {
         setIsAnswered(false);
       } else {
         setIsFinished(true);
+        finishSession(questions.length);
         if (newCorrectCount === questions.length) {
           confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2563eb', '#10b981', '#f59e0b'] });
         }
@@ -204,9 +209,24 @@ export const LearnMode: React.FC = () => {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Learn Mode</p>
           </div>
         </div>
-        <span className="text-sm font-bold text-slate-500 tabular-nums">
-          {currentIdx + 1} / {questions.length}
-        </span>
+        <div className="flex items-center gap-3">
+          {resultsCount > 0 && (
+            <button
+              onClick={async () => {
+                await pauseSession(questions.length);
+                navigate(`/sets/${setId}`);
+              }}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 border rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PauseCircle className="w-3.5 h-3.5" />}
+              Lưu & Thoát
+            </button>
+          )}
+          <span className="text-sm font-bold text-slate-500 tabular-nums">
+            {currentIdx + 1} / {questions.length}
+          </span>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-6">

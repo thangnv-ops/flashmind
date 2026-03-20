@@ -38,20 +38,28 @@ if (!SUPABASE_URL) {
 // Extract project ref from URL — https://[ref].supabase.co
 const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
 
-const sqlPath = resolve(__dirname, '../plan/sql/migration.sql');
-const sql = readFileSync(sqlPath, 'utf-8');
+const sqlFiles = [
+  resolve(__dirname, '../plan/sql/migration.sql'),
+  resolve(__dirname, '../plan/sql/phase6-migration.sql'),
+];
 
-// Remove comment-only lines, then split on ; to get individual statements
-const statements = sql
-  .split('\n')
-  .filter(line => !line.trimStart().startsWith('--'))
-  .join('\n')
-  .split(';')
-  .map(s => s.trim())
-  .filter(s => s.length > 0);
+function loadStatements(filePath: string): string[] {
+  const sql = readFileSync(filePath, 'utf-8');
+  return sql
+    .split('\n')
+    .filter(line => !line.trimStart().startsWith('--'))
+    .join('\n')
+    .split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+}
+
+const allStatements = sqlFiles.flatMap(p => loadStatements(p));
 
 console.log(`\n🔗  Targeting project: ${projectRef}`);
-console.log(`📄  Running ${statements.length} statements...\n`);
+console.log(`📄  Running ${allStatements.length} statements from ${sqlFiles.length} files...\n`);
+
+const statements = allStatements;
 
 let executed = 0;
 let skipped = 0;
@@ -92,4 +100,4 @@ for (const stmt of statements) {
 }
 
 console.log(`✅  Done! ${executed} executed, ${skipped} already existed.`);
-console.log('🎉  Your Supabase database is ready!\n');
+console.log('🎉  Database is ready (Phase 1-6)!\n');

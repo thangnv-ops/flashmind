@@ -16,6 +16,8 @@ import {
 import { useStudySets } from '../hooks/useStudySets';
 import { useMatchRecords } from '../hooks/useMatchRecords';
 import { relativeTime } from '../utils/time';
+import { VocabStatusPanel } from '../components/progress/VocabStatusPanel';
+import { DailyProgressChart } from '../components/progress/DailyProgressChart';
 import type { StudySet } from '../types';
 
 const MODES = [
@@ -204,6 +206,19 @@ export const SetOverview: React.FC = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* Card preview list */}
+        <div className="mb-8">
+          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
+            Vocabulary Status
+          </h2>
+          <VocabStatusPanel setId={set.id} />
+        </div>
+
+        {/* Daily progress chart for this set */}
+        <div className="mb-8">
+          <DailyProgressChart setId={set.id} />
         </div>
 
         {/* Card preview list */}

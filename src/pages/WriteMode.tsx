@@ -9,9 +9,11 @@ import {
   Trophy,
   RotateCcw,
   Loader2,
+  PauseCircle,
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
+import { useStudySession } from '../hooks/useStudySession';
 import { checkAnswer } from '../utils/levenshtein';
 import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
@@ -24,6 +26,7 @@ export const WriteMode: React.FC = () => {
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
+  const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'write');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [setTitle, setSetTitle] = useState('');
@@ -67,8 +70,10 @@ export const WriteMode: React.FC = () => {
   const handleCheck = () => {
     if (status !== 'idle' || !userInput.trim()) return;
     const result = checkAnswer(userInput, currentCard.term);
+    const isCorrect = result === 'correct' || result === 'almost';
     setStatus(result);
-    setResults(prev => [...prev, result === 'correct' || result === 'almost']);
+    setResults(prev => [...prev, isCorrect]);
+    recordResult(currentCard.id, isCorrect);
   };
 
   const handleNext = () => {
@@ -78,6 +83,7 @@ export const WriteMode: React.FC = () => {
       setStatus('idle');
     } else {
       setIsFinished(true);
+      finishSession(cards.length);
     }
   };
 
@@ -193,9 +199,24 @@ export const WriteMode: React.FC = () => {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Write Mode</p>
           </div>
         </div>
-        <span className="text-sm font-bold text-slate-500 tabular-nums">
-          {currentIdx + 1} / {cards.length}
-        </span>
+        <div className="flex items-center gap-3">
+          {resultsCount > 0 && (
+            <button
+              onClick={async () => {
+                await pauseSession(cards.length);
+                navigate(`/sets/${setId}`);
+              }}
+              disabled={isSaving}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-100 border rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <PauseCircle className="w-3.5 h-3.5" />}
+              Lưu & Thoát
+            </button>
+          )}
+          <span className="text-sm font-bold text-slate-500 tabular-nums">
+            {currentIdx + 1} / {cards.length}
+          </span>
+        </div>
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center p-6">
