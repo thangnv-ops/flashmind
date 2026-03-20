@@ -13,6 +13,9 @@ import {
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
 import { useStudySession } from '../hooks/useStudySession';
+import { useProgressUpdater } from '../hooks/useProgressUpdater';
+import { MasteryDots } from '../components/progress/MasteryDots';
+import { MasteryBadge } from '../components/progress/MasteryBadge';
 import { generateMCQuestions } from '../utils/questionGenerator';
 import type { MCQuestion } from '../utils/questionGenerator';
 import type { Flashcard } from '../types';
@@ -25,6 +28,7 @@ export const LearnMode: React.FC = () => {
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'learn');
+  const { submitAnswer } = useProgressUpdater();
 
   const [setTitle, setSetTitle] = useState('');
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -36,6 +40,10 @@ export const LearnMode: React.FC = () => {
   const [correctCount, setCorrectCount] = useState(0);
   const [wrongCardIds, setWrongCardIds] = useState<Set<string>>(new Set());
   const [isFinished, setIsFinished] = useState(false);
+  // Track mastery changes during the session
+  const [masteryUpdates, setMasteryUpdates] = useState<Record<string, number>>({});
+  // Last answer feedback for MasteryDots
+  const [lastAnswerCorrect, setLastAnswerCorrect] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!setId) return;
@@ -60,7 +68,15 @@ export const LearnMode: React.FC = () => {
 
     setSelectedChoice(choice);
     setIsAnswered(true);
+    setLastAnswerCorrect(isCorrect);
     recordResult(current.cardId, isCorrect);
+
+    // Update mastery via engine (fire-and-forget, non-blocking)
+    if (setId) {
+      submitAnswer(current.cardId, isCorrect, 'learn', setId).then(result => {
+        setMasteryUpdates(prev => ({ ...prev, [current.cardId]: result.newMasteryLevel }));
+      }).catch(() => {/* ignore DB errors */});
+    }
 
     if (isCorrect) {
       setCorrectCount(prev => prev + 1);
@@ -73,6 +89,7 @@ export const LearnMode: React.FC = () => {
         setCurrentIdx(prev => prev + 1);
         setSelectedChoice(null);
         setIsAnswered(false);
+        setLastAnswerCorrect(null);
       } else {
         setIsFinished(true);
         finishSession(questions.length);
@@ -81,7 +98,7 @@ export const LearnMode: React.FC = () => {
         }
       }
     }, 1200);
-  }, [isAnswered, questions, currentIdx, correctCount]);
+  }, [isAnswered, questions, currentIdx, correctCount, setId, submitAnswer, recordResult, finishSession]);
 
   const handleStudyAgain = () => {
     setQuestions(generateMCQuestions([...allCards]));
@@ -264,6 +281,18 @@ export const LearnMode: React.FC = () => {
               </button>
             ))}
           </div>
+
+          {/* Mastery feedback after answering */}
+          {isAnswered && masteryUpdates[currentQuestion.cardId] !== undefined && (
+            <div className="flex flex-col items-center gap-1.5">
+              <MasteryDots
+                level={masteryUpdates[currentQuestion.cardId]}
+                animate={lastAnswerCorrect === true}
+                penaltyAnimation={lastAnswerCorrect === false}
+              />
+              <MasteryBadge level={masteryUpdates[currentQuestion.cardId]} size="sm" />
+            </div>
+          )}
         </div>
       </main>
     </div>

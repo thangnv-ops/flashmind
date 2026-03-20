@@ -11,6 +11,7 @@ import type { StudySet } from '../types';
 import type { FolderWithCount } from '../hooks/useFolders';
 import { Plus, Clock, Filter, FolderPlus, Loader2, X, ChevronDown, BarChart2 } from 'lucide-react';
 import { DailyProgressChart } from '../components/progress/DailyProgressChart';
+import { MasteryPieChart } from '../components/progress/MasteryPieChart';
 import { StudySetCardSkeleton } from '../components/ui/Skeleton';
 
 export const Dashboard: React.FC = () => {
@@ -262,6 +263,11 @@ export const Dashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-800">Tiến trình học</h2>
         </div>
         <DailyProgressChart />
+      </section>
+
+      {/* Mastery overview pie chart */}
+      <section className="mb-12">
+        <MasteryPieChart />
       </section>
 
       <section>

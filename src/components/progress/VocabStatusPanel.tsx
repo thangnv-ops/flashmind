@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, RefreshCw, BookOpen, Loader2 } from 'lucide-react';
 import { useVocabStatus } from '../../hooks/useVocabStatus';
+import type { VocabGroup } from '../../hooks/useVocabStatus';
 import type { Flashcard } from '../../types';
 import { cn } from '../../lib/utils';
 
 interface VocabStatusPanelProps {
   setId: string;
+  /** Pre-loaded groups — if provided, skips the internal DB query. */
+  groups?: VocabGroup;
+  loading?: boolean;
 }
 
 type Tab = 'mastered' | 'inProgress' | 'notStarted';
@@ -49,9 +53,11 @@ const CardList: React.FC<{ cards: Flashcard[] }> = ({ cards }) => (
   </div>
 );
 
-export const VocabStatusPanel: React.FC<VocabStatusPanelProps> = ({ setId }) => {
+export const VocabStatusPanel: React.FC<VocabStatusPanelProps> = ({ setId, groups: groupsProp, loading: loadingProp }) => {
   const navigate = useNavigate();
-  const { groups, loading } = useVocabStatus(setId);
+  const { groups: groupsFetched, loading: loadingFetched } = useVocabStatus(groupsProp ? undefined : setId);
+  const groups = groupsProp ?? groupsFetched;
+  const loading = loadingProp !== undefined ? loadingProp : loadingFetched;
   const [activeTab, setActiveTab] = useState<Tab | null>(null);
 
   if (loading) {

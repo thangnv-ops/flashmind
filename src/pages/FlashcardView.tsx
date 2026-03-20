@@ -17,8 +17,14 @@ import {
   Loader2,
 } from 'lucide-react';
 import { FlipCard } from '../components/flashcards/FlipCard';
+import { MasteryBadge } from '../components/progress/MasteryBadge';
+import { MasteryDots } from '../components/progress/MasteryDots';
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
+import { useProgressUpdater } from '../hooks/useProgressUpdater';
+import { useToast, ToastContainer } from '../components/common/Toast';
+import { supabase, isMockMode } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
@@ -26,8 +32,11 @@ import confetti from 'canvas-confetti';
 export const FlashcardView: React.FC = () => {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
+  const { user } = useAuth();
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
+  const { submitAnswer, isUpdating } = useProgressUpdater();
+  const { toasts, addToast, dismiss } = useToast();
 
   const [setTitle, setSetTitle] = useState('');
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -42,9 +51,37 @@ export const FlashcardView: React.FC = () => {
   const [modeSwitcherOpen, setModeSwitcherOpen] = useState(false);
   const modeSwitcherRef = useRef<HTMLDivElement>(null);
 
+  // Mastery state per card
+  const [cardMastery, setCardMastery] = useState<Record<string, number>>({});
+  const [cardLeech, setCardLeech] = useState<Record<string, boolean>>({});
+  // flash feedback: 'correct' | 'wrong' | null
+  const [flashFeedback, setFlashFeedback] = useState<'correct' | 'wrong' | null>(null);
+  const [penaltyAnimate, setPenaltyAnimate] = useState(false);
+
   const activeCards = showStarredOnly
     ? cards.filter(c => starredIds.has(c.id))
     : cards;
+
+  // Load initial mastery levels from DB
+  useEffect(() => {
+    if (!setId || !user?.id || isMockMode) return;
+    supabase
+      .from('progress')
+      .select('card_id, mastery_level, is_leech')
+      .eq('user_id', user.id)
+      .eq('set_id', setId)
+      .then(({ data }) => {
+        if (!data) return;
+        const m: Record<string, number> = {};
+        const l: Record<string, boolean> = {};
+        data.forEach((r: any) => {
+          m[r.card_id] = r.mastery_level ?? 1;
+          l[r.card_id] = r.is_leech ?? false;
+        });
+        setCardMastery(m);
+        setCardLeech(l);
+      });
+  }, [setId, user?.id]);
 
   useEffect(() => {
     if (!setId) return;
@@ -78,6 +115,42 @@ export const FlashcardView: React.FC = () => {
     }, 150);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, activeCards.length]);
+
+  const handleEvaluate = useCallback(
+    async (isCorrect: boolean) => {
+      if (!setId) return;
+      const card = activeCards[currentIndex];
+      if (!card) return;
+
+      // Flash feedback
+      setFlashFeedback(isCorrect ? 'correct' : 'wrong');
+      if (!isCorrect) setPenaltyAnimate(true);
+      setTimeout(() => {
+        setFlashFeedback(null);
+        setPenaltyAnimate(false);
+      }, isCorrect ? 600 : 800);
+
+      const result = await submitAnswer(card.id, isCorrect, 'flashcard', setId);
+
+      // Update local mastery state
+      setCardMastery(prev => ({ ...prev, [card.id]: result.newMasteryLevel }));
+
+      if (result.becameLeech) {
+        setCardLeech(prev => ({ ...prev, [card.id]: true }));
+        addToast('Từ này khó nhớ quá! Thử đổi ví dụ hoặc hình ảnh liên tưởng nhé.', 'info');
+      } else if (!isCorrect) {
+        addToast(`Ối! Bạn quên từ này rồi. Đã hạ về ${result.badge} để ôn lại nhé!`, 'error');
+      }
+
+      if (isCorrect && result.newMasteryLevel === 10) {
+        confetti({ particleCount: 120, spread: 60, origin: { y: 0.6 }, colors: ['#a855f7', '#22c55e'] });
+      }
+
+      // Advance to next card
+      setTimeout(() => nextCard(), 400);
+    },
+    [activeCards, currentIndex, setId, submitAnswer, addToast, nextCard],
+  );
 
   const prevCard = useCallback(() => {
     setIsFlipped(false);
@@ -253,6 +326,53 @@ export const FlashcardView: React.FC = () => {
             onStar={() => toggleStar(activeCards[currentIndex].id)}
           />
 
+          {/* ── Mastery info ── */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-3">
+              <MasteryBadge
+                level={cardMastery[activeCards[currentIndex].id] ?? 1}
+                isLeech={cardLeech[activeCards[currentIndex].id] ?? false}
+                size="sm"
+              />
+              {flashFeedback && (
+                <span
+                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                    flashFeedback === 'correct'
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {flashFeedback === 'correct' ? '✓ Đúng!' : '✗ Sai'}
+                </span>
+              )}
+            </div>
+            <MasteryDots
+              level={cardMastery[activeCards[currentIndex].id] ?? 1}
+              animate={flashFeedback === 'correct'}
+              penaltyAnimation={penaltyAnimate}
+            />
+          </div>
+
+          {/* ── Evaluation buttons (visible after flip) ── */}
+          {isFlipped && (
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => handleEvaluate(false)}
+                disabled={isUpdating}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-red-50 text-red-600 font-semibold border border-red-200 hover:bg-red-100 transition-colors disabled:opacity-50"
+              >
+                ✗ Chưa biết
+              </button>
+              <button
+                onClick={() => handleEvaluate(true)}
+                disabled={isUpdating}
+                className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-50 text-green-700 font-semibold border border-green-200 hover:bg-green-100 transition-colors disabled:opacity-50"
+              >
+                ✓ Biết rồi
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center justify-between w-full px-4">
             <div className="flex items-center gap-2">
               <button
@@ -336,6 +456,8 @@ export const FlashcardView: React.FC = () => {
           style={{ width: `${activeCards.length ? ((currentIndex + 1) / activeCards.length) * 100 : 0}%` }}
         />
       </div>
+
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </div>
   );
 };

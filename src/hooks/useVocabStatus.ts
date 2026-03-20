@@ -5,8 +5,8 @@ import { MOCK_SETS } from '../mockData';
 import type { Flashcard } from '../types';
 
 export interface VocabGroup {
-  mastered: Flashcard[];    // mastery_level >= 3
-  inProgress: Flashcard[];  // mastery_level 1–2
+  mastered: Flashcard[];    // mastery_level >= 8
+  inProgress: Flashcard[];  // mastery_level 1–7
   notStarted: Flashcard[];  // mastery_level = 0 or no row in progress
 }
 
@@ -67,7 +67,7 @@ export function useVocabStatus(setId: string | undefined) {
       cards.forEach((card: any) => {
         const mastery = masteryMap.get(card.id) ?? 0;
         const flashcard = card as Flashcard;
-        if (mastery >= 3) mastered.push(flashcard);
+        if (mastery >= 8) mastered.push(flashcard);
         else if (mastery >= 1) inProgress.push(flashcard);
         else notStarted.push(flashcard);
       });

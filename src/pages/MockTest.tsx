@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
 import { useStudySession } from '../hooks/useStudySession';
+import { useProgressUpdater } from '../hooks/useProgressUpdater';
 import { generateTest } from '../utils/questionGenerator';
 import { checkAnswer } from '../utils/levenshtein';
 import type { TestQuestion } from '../utils/questionGenerator';
 import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
+import { MasteryBadge } from '../components/progress/MasteryBadge';
 
 interface QuestionResponse {
   answered: boolean;
@@ -32,6 +34,7 @@ export const MockTest: React.FC = () => {
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'test');
+  const { submitAnswer } = useProgressUpdater();
   const writeInputRef = useRef<HTMLInputElement>(null);
 
   const [setTitle, setSetTitle] = useState('');
@@ -46,6 +49,7 @@ export const MockTest: React.FC = () => {
   const [currentCorrect, setCurrentCorrect] = useState(false);
   const [currentWriteStatus, setCurrentWriteStatus] = useState<'correct' | 'almost' | 'wrong' | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const [masteryUpdates, setMasteryUpdates] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!setId) return;
@@ -87,6 +91,9 @@ export const MockTest: React.FC = () => {
     setCurrentCorrect(isCorrect);
     setResponses(prev => [...prev, { answered: true, correct: isCorrect, userAnswer: choice }]);
     recordResult(currentQuestion.cardId, isCorrect);
+    submitAnswer(currentQuestion.cardId, isCorrect, 'test', setId!).then(r => {
+      if (r) setMasteryUpdates(prev => ({ ...prev, [currentQuestion.cardId]: r.newMasteryLevel }));
+    });
   };
 
   const handleWriteCheck = () => {
@@ -98,6 +105,9 @@ export const MockTest: React.FC = () => {
     setCurrentCorrect(isCorrect);
     setResponses(prev => [...prev, { answered: true, correct: isCorrect, userAnswer: writeInput }]);
     recordResult(currentQuestion.cardId, isCorrect);
+    submitAnswer(currentQuestion.cardId, isCorrect, 'test', setId!).then(r => {
+      if (r) setMasteryUpdates(prev => ({ ...prev, [currentQuestion.cardId]: r.newMasteryLevel }));
+    });
   };
 
   const handleNext = () => {
@@ -185,9 +195,10 @@ export const MockTest: React.FC = () => {
           <div className="bg-white rounded-2xl border overflow-hidden mb-6">
             <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-2 border-b bg-slate-50">
               <div className="col-span-1"></div>
-              <div className="col-span-4">Term / Prompt</div>
-              <div className="col-span-4">Your Answer</div>
+              <div className="col-span-3">Term / Prompt</div>
+              <div className="col-span-3">Your Answer</div>
               <div className="col-span-3">Correct Answer</div>
+              <div className="col-span-2">Mastery</div>
             </div>
             {questions.map((q, i) => {
               const resp = responses[i];
@@ -205,11 +216,16 @@ export const MockTest: React.FC = () => {
                       : <XCircle className="w-4 h-4 text-red-400" />
                     }
                   </div>
-                  <div className="col-span-4 font-medium text-slate-700 pr-2 line-clamp-2">{q.prompt}</div>
-                  <div className={cn('col-span-4 pr-2 line-clamp-2', resp?.correct ? 'text-green-700' : 'text-red-600')}>
+                  <div className="col-span-3 font-medium text-slate-700 pr-2 line-clamp-2">{q.prompt}</div>
+                  <div className={cn('col-span-3 pr-2 line-clamp-2', resp?.correct ? 'text-green-700' : 'text-red-600')}>
                     {resp?.userAnswer || '—'}
                   </div>
                   <div className="col-span-3 text-slate-500 line-clamp-2">{q.correctAnswer}</div>
+                  <div className="col-span-2 flex items-center">
+                    {masteryUpdates[q.cardId] !== undefined && (
+                      <MasteryBadge level={masteryUpdates[q.cardId]} size="sm" />
+                    )}
+                  </div>
                 </div>
               );
             })}

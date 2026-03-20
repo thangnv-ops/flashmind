@@ -32,12 +32,28 @@ export function useStudySets() {
         .limit(20);
 
       if (err) throw err;
+      if (!data || data.length === 0) return [];
 
-      return (data ?? []).map((row: any) => ({
-        ...row,
-        // card_count comes from the aggregate
-        flashcards: undefined,
-      })) as StudySet[];
+      const setIds = data.map((s: any) => s.id);
+
+      // Fetch mastered card count per set (mastery_level >= 8)
+      const { data: masteredRows } = await supabase
+        .from('progress')
+        .select('set_id')
+        .in('set_id', setIds)
+        .gte('mastery_level', 8);
+
+      const masteredPerSet = new Map<string, number>();
+      (masteredRows ?? []).forEach((r: any) => {
+        masteredPerSet.set(r.set_id, (masteredPerSet.get(r.set_id) ?? 0) + 1);
+      });
+
+      return data.map((row: any) => {
+        const totalCards: number = row.flashcards?.[0]?.count ?? 0;
+        const mastered = masteredPerSet.get(row.id) ?? 0;
+        const progressPercent = totalCards > 0 ? Math.round((mastered / totalCards) * 100) : 0;
+        return { ...row, flashcards: undefined, progressPercent } as StudySet;
+      });
     } catch (e: any) {
       setError(e.message);
       return [];

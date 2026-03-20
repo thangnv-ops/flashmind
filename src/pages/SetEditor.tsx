@@ -59,6 +59,14 @@ export const SetEditor: React.FC = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSticky, setIsSticky] = useState(false);
   const [loadingSet, setLoadingSet] = useState(false);
+  const navigateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup navigate timer on unmount to prevent state updates after component is gone
+  useEffect(() => {
+    return () => {
+      if (navigateTimerRef.current) clearTimeout(navigateTimerRef.current);
+    };
+  }, []);
 
   // Load set for edit mode
   useEffect(() => {
@@ -223,7 +231,7 @@ export const SetEditor: React.FC = () => {
     }
     if (success) {
       addToast(editSetId ? 'Set updated!' : 'Set created!', 'success');
-      setTimeout(() => navigate('/dashboard'), 800);
+      navigateTimerRef.current = setTimeout(() => navigate('/dashboard'), 800);
     } else {
       addToast('Failed to save. Please try again.', 'error');
     }

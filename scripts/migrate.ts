@@ -41,6 +41,7 @@ const projectRef = new URL(SUPABASE_URL).hostname.split('.')[0];
 const sqlFiles = [
   resolve(__dirname, '../plan/sql/migration.sql'),
   resolve(__dirname, '../plan/sql/phase6-migration.sql'),
+  resolve(__dirname, '../plan/sql/phase7-migration.sql'),
 ];
 
 function loadStatements(filePath: string): string[] {

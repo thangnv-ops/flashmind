@@ -82,75 +82,8 @@ export function useStudySession(setId: string | undefined, mode: StudyMode) {
       try {
       results = [...resultsRef.current];
 
-      // Keep only the last result per card (card may appear multiple times)
-      const lastResultMap = new Map<string, boolean>();
-      results.forEach(r => lastResultMap.set(r.cardId, r.isCorrect));
-      const cardIds = [...lastResultMap.keys()];
-
-      // Fetch current mastery levels so we can compute deltas
-      const { data: currentProgress } = await supabase
-        .from('progress')
-        .select('card_id, mastery_level')
-        .eq('user_id', user.id)
-        .in('card_id', cardIds);
-
-      const masteryMap = new Map<string, number>();
-      (currentProgress ?? []).forEach((p: any) => masteryMap.set(p.card_id, p.mastery_level));
-
-      const progressUpserts: any[] = [];
-      const dailyLogInserts: any[] = [];
-      const today = new Date().toISOString().split('T')[0];
-
-      lastResultMap.forEach((isCorrect, cardId) => {
-        const prevMastery = masteryMap.get(cardId) ?? 0;
-        const newMastery = isCorrect
-          ? Math.min(prevMastery + 1, 5)
-          : Math.max(prevMastery - 1, 0);
-
-        progressUpserts.push({
-          user_id: user.id,
-          card_id: cardId,
-          mastery_level: newMastery,
-          last_result: isCorrect ? 'correct' : 'wrong',
-          session_id: sessionIdRef.current,
-          updated_at: new Date().toISOString(),
-        });
-
-        // 'learned': first time answering this card correctly
-        if (isCorrect && prevMastery === 0) {
-          dailyLogInserts.push({
-            user_id: user.id,
-            card_id: cardId,
-            set_id: setId,
-            event_type: 'learned',
-            logged_at: today,
-          });
-        }
-        // 'forgotten': was mastered (≥3), now answered wrong
-        if (!isCorrect && prevMastery >= 3) {
-          dailyLogInserts.push({
-            user_id: user.id,
-            card_id: cardId,
-            set_id: setId,
-            event_type: 'forgotten',
-            logged_at: today,
-          });
-        }
-      });
-
-      await supabase
-        .from('progress')
-        .upsert(progressUpserts, { onConflict: 'user_id,card_id' });
-
-      if (dailyLogInserts.length > 0) {
-        await supabase
-          .from('daily_log')
-          .upsert(dailyLogInserts, {
-            onConflict: 'user_id,card_id,logged_at,event_type',
-            ignoreDuplicates: true,
-          });
-      }
-
+      // Note: mastery_level updates and daily_log writes are handled by
+      // useProgressUpdater (Phase 7). This hook only records session stats.
       if (sessionIdRef.current) {
         await supabase
           .from('study_sessions')

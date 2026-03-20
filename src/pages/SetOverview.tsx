@@ -12,12 +12,18 @@ import {
   ChevronUp,
   Loader2,
   Trophy,
+  AlertTriangle,
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
 import { useMatchRecords } from '../hooks/useMatchRecords';
+import { useReviewQueue } from '../hooks/useReviewQueue';
+import { useVocabStatus } from '../hooks/useVocabStatus';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase, isMockMode } from '../lib/supabase';
 import { relativeTime } from '../utils/time';
 import { VocabStatusPanel } from '../components/progress/VocabStatusPanel';
 import { DailyProgressChart } from '../components/progress/DailyProgressChart';
+import { MasteryBadge } from '../components/progress/MasteryBadge';
 import type { StudySet } from '../types';
 
 const MODES = [
@@ -70,11 +76,16 @@ export const SetOverview: React.FC = () => {
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
   const { getPersonalBest } = useMatchRecords();
+  const { user } = useAuth();
+  const { dueCards, totalDue } = useReviewQueue(setId);
+  const { groups: vocabGroups, loading: vocabLoading } = useVocabStatus(setId);
 
   const [set, setSet] = useState<StudySet | null>(null);
   const [loading, setLoading] = useState(true);
   const [matchBest, setMatchBest] = useState<number | null>(null);
   const [showAllCards, setShowAllCards] = useState(false);
+  const [leechMap, setLeechMap] = useState<Record<string, number>>({});
+  const [activeTab, setActiveTab] = useState<'all' | 'deep-study'>('all');
 
   useEffect(() => {
     if (!setId) return;
@@ -89,6 +100,23 @@ export const SetOverview: React.FC = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId]);
+
+  useEffect(() => {
+    if (!setId || !user || isMockMode) return;
+    supabase
+      .from('progress')
+      .select('card_id, mastery_level')
+      .eq('set_id', setId)
+      .eq('user_id', user.id)
+      .eq('is_leech', true)
+      .then(({ data }) => {
+        if (data) {
+          const map: Record<string, number> = {};
+          data.forEach(row => { map[row.card_id] = row.mastery_level; });
+          setLeechMap(map);
+        }
+      });
+  }, [setId, user]);
 
   if (loading) {
     return (
@@ -109,7 +137,14 @@ export const SetOverview: React.FC = () => {
 
   const cards = set.flashcards ?? [];
   const cardCount = cards.length;
-  const masteredCount = Math.round(((set.progressPercent ?? 0) / 100) * cardCount);
+
+  // Live progress computed from mastery table (mastered = >= 8)
+  const liveMastered = vocabGroups.mastered.length;
+  const liveInProgress = vocabGroups.inProgress.length;
+  const liveNotStarted = vocabGroups.notStarted.length;
+  const liveTotal = liveMastered + liveInProgress + liveNotStarted;
+  const liveProgressPct = liveTotal > 0 ? Math.round((liveMastered / liveTotal) * 100) : 0;
+
   const visibleCards = showAllCards ? cards : cards.slice(0, PREVIEW_LIMIT);
 
   const formatMatchTime = (ms: number) => {
@@ -154,7 +189,7 @@ export const SetOverview: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg">
             <div className="w-3 h-3 rounded-full bg-emerald-400" />
-            <span className="font-semibold text-slate-700">{masteredCount} / {cardCount} mastered</span>
+            <span className="font-semibold text-slate-700">{liveMastered} / {liveTotal || cardCount} đã thành thạo</span>
           </div>
           {matchBest !== null && (
             <div className="flex items-center gap-2 px-3 py-2 bg-white border rounded-lg">
@@ -172,14 +207,50 @@ export const SetOverview: React.FC = () => {
           <div className="mb-8">
             <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
               <span>Progress</span>
-              <span>{set.progressPercent ?? 0}%</span>
+              <span>{liveProgressPct}%</span>
             </div>
-            <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary transition-all duration-500 rounded-full"
-                style={{ width: `${set.progressPercent ?? 0}%` }}
-              />
+            <div className="h-2.5 w-full bg-slate-200 rounded-full overflow-hidden flex">
+              {liveMastered > 0 && liveTotal > 0 && (
+                <div
+                  className="h-full bg-emerald-400 transition-all duration-500"
+                  style={{ width: `${Math.round((liveMastered / liveTotal) * 100)}%` }}
+                />
+              )}
+              {liveInProgress > 0 && liveTotal > 0 && (
+                <div
+                  className="h-full bg-amber-400 transition-all duration-500"
+                  style={{ width: `${Math.round((liveInProgress / liveTotal) * 100)}%` }}
+                />
+              )}
             </div>
+            <div className="flex items-center gap-4 mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> Đã học {liveMastered}</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Đang học {liveInProgress}</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" /> Chưa học {liveNotStarted}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Review Queue banner */}
+        {totalDue > 0 ? (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">📬</span>
+              <div>
+                <p className="font-bold text-blue-700 text-sm">Ôn tập hôm nay</p>
+                <p className="text-blue-500 text-xs">{totalDue} thẻ đến hạn</p>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate(`/flashcards/${setId}`)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shrink-0"
+            >
+              ▶ Bắt đầu ôn tập
+            </button>
+          </div>
+        ) : (
+          <div className="mb-6 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs text-slate-400 text-center">
+            ✅ Bạn đã ôn hết hôm nay! Quay lại sau.
           </div>
         )}
 
@@ -208,12 +279,12 @@ export const SetOverview: React.FC = () => {
           </div>
         </div>
 
-        {/* Card preview list */}
+        {/* Vocabulary Status */}
         <div className="mb-8">
           <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
             Vocabulary Status
           </h2>
-          <VocabStatusPanel setId={set.id} />
+          <VocabStatusPanel setId={set.id} groups={vocabGroups} loading={vocabLoading} />
         </div>
 
         {/* Daily progress chart for this set */}
@@ -221,43 +292,107 @@ export const SetOverview: React.FC = () => {
           <DailyProgressChart setId={set.id} />
         </div>
 
-        {/* Card preview list */}
+        {/* Cards section with tabs */}
         <div>
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
-            Cards ({cardCount})
-          </h2>
-          {cards.length === 0 ? (
-            <div className="bg-white border rounded-xl p-8 text-center text-slate-400 text-sm">
-              No cards yet. <button onClick={() => navigate(`/editor/${set.id}`)} className="text-primary font-bold hover:underline">Add some.</button>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-2">
-                <div className="col-span-5">Term</div>
-                <div className="col-span-7">Definition</div>
-              </div>
-              {visibleCards.map(card => (
-                <div
-                  key={card.id}
-                  className="grid grid-cols-12 bg-white border rounded-xl px-4 py-3 text-sm hover:border-primary/30 transition-colors"
-                >
-                  <div className="col-span-5 font-semibold text-slate-800 pr-4 truncate">{card.term}</div>
-                  <div className="col-span-7 text-slate-500 truncate">{card.definition}</div>
-                </div>
-              ))}
-              {cards.length > PREVIEW_LIMIT && (
-                <button
-                  onClick={() => setShowAllCards(v => !v)}
-                  className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-semibold text-primary hover:bg-primary/5 rounded-xl transition-colors"
-                >
-                  {showAllCards ? (
-                    <><ChevronUp className="w-4 h-4" /> Show less</>
-                  ) : (
-                    <><ChevronDown className="w-4 h-4" /> View all {cards.length} cards</>
-                  )}
-                </button>
+          {/* Tab header */}
+          <div className="flex items-center gap-1 mb-4">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                activeTab === 'all'
+                  ? 'bg-primary text-white'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              Cards ({cardCount})
+            </button>
+            <button
+              onClick={() => setActiveTab('deep-study')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold transition-colors ${
+                activeTab === 'deep-study'
+                  ? 'bg-amber-500 text-white'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <AlertTriangle className="w-3 h-3" />
+              Deep Study
+              {Object.keys(leechMap).length > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === 'deep-study' ? 'bg-white/30 text-white' : 'bg-amber-100 text-amber-600'
+                }`}>
+                  {Object.keys(leechMap).length}
+                </span>
               )}
-            </div>
+            </button>
+          </div>
+
+          {activeTab === 'all' ? (
+            <>
+              {cards.length === 0 ? (
+                <div className="bg-white border rounded-xl p-8 text-center text-slate-400 text-sm">
+                  No cards yet. <button onClick={() => navigate(`/editor/${set.id}`)} className="text-primary font-bold hover:underline">Add some.</button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-2">
+                    <div className="col-span-5">Term</div>
+                    <div className="col-span-7">Definition</div>
+                  </div>
+                  {visibleCards.map(card => (
+                    <div
+                      key={card.id}
+                      className="grid grid-cols-12 bg-white border rounded-xl px-4 py-3 text-sm hover:border-primary/30 transition-colors"
+                    >
+                      <div className="col-span-5 font-semibold text-slate-800 pr-4 truncate">{card.term}</div>
+                      <div className="col-span-7 text-slate-500 truncate">{card.definition}</div>
+                    </div>
+                  ))}
+                  {cards.length > PREVIEW_LIMIT && (
+                    <button
+                      onClick={() => setShowAllCards(v => !v)}
+                      className="w-full py-2.5 flex items-center justify-center gap-2 text-sm font-semibold text-primary hover:bg-primary/5 rounded-xl transition-colors"
+                    >
+                      {showAllCards ? (
+                        <><ChevronUp className="w-4 h-4" /> Show less</>
+                      ) : (
+                        <><ChevronDown className="w-4 h-4" /> View all {cards.length} cards</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {Object.keys(leechMap).length === 0 ? (
+                <div className="bg-white border rounded-xl p-8 text-center text-slate-400 text-sm">
+                  Không có thẻ khó nào. Tiếp tục học để phát hiện thẻ cần chú ý.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-3">
+                    ⚠️ Những thẻ này đã bị sai nhiều lần. Thử đổi ví dụ hoặc hình ảnh liên tưởng để ghi nhớ tốt hơn.
+                  </p>
+                  <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-widest px-4 py-2">
+                    <div className="col-span-4">Term</div>
+                    <div className="col-span-5">Definition</div>
+                    <div className="col-span-3">Mastery</div>
+                  </div>
+                  {cards.filter(c => leechMap[c.id] !== undefined).map(card => (
+                    <div
+                      key={card.id}
+                      className="grid grid-cols-12 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm"
+                    >
+                      <div className="col-span-4 font-semibold text-slate-800 pr-4 truncate">{card.term}</div>
+                      <div className="col-span-5 text-slate-500 truncate pr-2">{card.definition}</div>
+                      <div className="col-span-3 flex items-center">
+                        <MasteryBadge level={leechMap[card.id]} size="sm" isLeech />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { CheckCircle, XCircle, AlertCircle, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -61,10 +62,13 @@ interface ToastContainerProps {
 
 export function ToastContainer({ toasts, onDismiss }: ToastContainerProps) {
   if (toasts.length === 0) return null;
-  return (
+  const container = typeof document !== 'undefined' ? document.body : null;
+  if (!container) return null;
+  return ReactDOM.createPortal(
     <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3 items-end">
       {toasts.map(t => React.createElement(Toast, { key: t.id, toast: t, onDismiss }))}
-    </div>
+    </div>,
+    container,
   );
 }
 

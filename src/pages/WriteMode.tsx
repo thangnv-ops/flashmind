@@ -13,10 +13,13 @@ import {
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
 import { useStudySession } from '../hooks/useStudySession';
+import { useProgressUpdater } from '../hooks/useProgressUpdater';
 import { checkAnswer } from '../utils/levenshtein';
 import type { Flashcard } from '../types';
 import { cn } from '../lib/utils';
 import confetti from 'canvas-confetti';
+import { MasteryDots } from '../components/progress/MasteryDots';
+import { MasteryBadge } from '../components/progress/MasteryBadge';
 
 type AnswerStatus = 'idle' | 'correct' | 'almost' | 'wrong' | 'overridden';
 
@@ -26,6 +29,7 @@ export const WriteMode: React.FC = () => {
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'write');
+  const { submitAnswer } = useProgressUpdater();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [setTitle, setSetTitle] = useState('');
@@ -38,6 +42,7 @@ export const WriteMode: React.FC = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [wrongAttempts, setWrongAttempts] = useState(0);
   const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
+  const [masteryUpdates, setMasteryUpdates] = useState<Record<string, number>>({});
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Clear auto-next timer on unmount
@@ -103,6 +108,9 @@ export const WriteMode: React.FC = () => {
       if (wrongAttempts === 0) {
         setResults(prev => [...prev, true]);
         recordResult(currentCard.id, true);
+        submitAnswer(currentCard.id, true, 'write', setId!).then(r => {
+          if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
+        });
       }
       // Auto-advance after 1 second
       autoNextTimerRef.current = setTimeout(advanceCard, 1000);
@@ -111,6 +119,9 @@ export const WriteMode: React.FC = () => {
       if (wrongAttempts === 0) {
         setResults(prev => [...prev, false]);
         recordResult(currentCard.id, false);
+        submitAnswer(currentCard.id, false, 'write', setId!).then(r => {
+          if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
+        });
       }
       const nextWrongCount = wrongAttempts + 1;
       setWrongAttempts(nextWrongCount);
@@ -312,6 +323,17 @@ export const WriteMode: React.FC = () => {
 
             {feedback && (
               <p className={cn('text-sm font-semibold', feedback.color)}>{feedback.text}</p>
+            )}
+
+            {status !== 'idle' && masteryUpdates[currentCard.id] !== undefined && (
+              <div className="flex items-center gap-3 px-1 pt-1">
+                <MasteryDots
+                  level={masteryUpdates[currentCard.id]}
+                  animate={status === 'correct' || status === 'almost' || status === 'overridden'}
+                  penaltyAnimation={status === 'wrong'}
+                />
+                <MasteryBadge level={masteryUpdates[currentCard.id]} size="sm" />
+              </div>
             )}
 
             {wrongAttempts > 0 && status === 'idle' && (
