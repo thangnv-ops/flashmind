@@ -1,19 +1,25 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, User, Play, LayoutGrid, Pencil, Trash2 } from 'lucide-react';
+import { MoreVertical, MoreHorizontal, User, Play, LayoutGrid, Pencil, Trash2, BookOpen, PenLine, ClipboardList, Clock } from 'lucide-react';
 import type { StudySet } from '../../types';
+import { relativeTime } from '../../utils/time';
 
 interface StudySetCardProps {
   set: StudySet;
   onClick: (id: string) => void;
   onPlayMatch: (id: string) => void;
+  onLearn?: (id: string) => void;
+  onWrite?: (id: string) => void;
+  onTest?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
 }
 
-export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlayMatch, onEdit, onDelete }) => {
+export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlayMatch, onLearn, onWrite, onTest, onEdit, onDelete }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const modeMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -25,6 +31,16 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
     if (menuOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (modeMenuRef.current && !modeMenuRef.current.contains(e.target as Node)) {
+        setModeMenuOpen(false);
+      }
+    };
+    if (modeMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [modeMenuOpen]);
 
   return (
     <div 
@@ -95,6 +111,11 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
             <User className="w-3 h-3 text-slate-500" />
           </div>
           <span className="text-xs font-medium text-slate-600">You</span>
+          <span className="text-slate-200">·</span>
+          <div className="flex items-center gap-1 text-xs text-slate-400">
+            <Clock className="w-3 h-3" />
+            {relativeTime(set.last_accessed)}
+          </div>
         </div>
 
         <div className="space-y-1.5 mb-6">
@@ -111,21 +132,55 @@ export const StudySetCard: React.FC<StudySetCardProps> = ({ set, onClick, onPlay
         </div>
       </div>
 
-      <div className="flex items-center gap-2 pt-4 border-t">
-        <button 
+      <div className="flex items-center gap-1.5 pt-4 border-t">
+        <button
           onClick={(e) => { e.stopPropagation(); onClick(set.id); }}
-          className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 hover:bg-primary/10 text-slate-600 hover:text-primary rounded-lg text-xs font-bold transition-all"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-50 hover:bg-primary/10 text-slate-600 hover:text-primary rounded-lg text-xs font-bold transition-all"
         >
           <LayoutGrid className="w-3.5 h-3.5" />
-          Flashcards
+          Cards
         </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onPlayMatch(set.id); }}
-          className="flex-1 flex items-center justify-center gap-2 py-2 bg-slate-50 hover:bg-primary/10 text-slate-600 hover:text-primary rounded-lg text-xs font-bold transition-all"
+        <button
+          onClick={(e) => { e.stopPropagation(); onLearn?.(set.id); }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-50 hover:bg-primary/10 text-slate-600 hover:text-primary rounded-lg text-xs font-bold transition-all"
         >
-          <Play className="w-3.5 h-3.5" />
-          Match
+          <BookOpen className="w-3.5 h-3.5" />
+          Learn
         </button>
+        <div className="relative shrink-0" ref={modeMenuRef}>
+          <button
+            onClick={(e) => { e.stopPropagation(); setModeMenuOpen(v => !v); }}
+            className="flex items-center justify-center p-2 bg-slate-50 hover:bg-primary/10 text-slate-500 hover:text-primary rounded-lg transition-all"
+            title="More study modes"
+          >
+            <MoreHorizontal className="w-3.5 h-3.5" />
+          </button>
+          {modeMenuOpen && (
+            <div className="absolute bottom-10 right-0 z-20 bg-white border rounded-xl shadow-lg py-1 w-36 text-sm">
+              <button
+                onClick={(e) => { e.stopPropagation(); setModeMenuOpen(false); onWrite?.(set.id); }}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-slate-700 transition-colors"
+              >
+                <PenLine className="w-3.5 h-3.5" />
+                Write
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setModeMenuOpen(false); onTest?.(set.id); }}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-slate-700 transition-colors"
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                Test
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setModeMenuOpen(false); onPlayMatch(set.id); }}
+                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50 text-slate-700 transition-colors"
+              >
+                <Play className="w-3.5 h-3.5" />
+                Match
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

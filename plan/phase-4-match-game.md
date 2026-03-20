@@ -11,16 +11,16 @@ MatchGame hiện đã có UI và logic cơ bản. Giai đoạn này tập trung 
 
 ### MatchGame (`src/pages/MatchGame.tsx`) — Gần hoàn chỉnh
 
-- [x] `GameCard` interface: `id`, `content`, `type` (`term|definition`), `pairId`, `status`
-- [x] `initGame()`: tách cards thành term + definition, xáo trộn ngẫu nhiên (dùng `set.flashcards` — đã cập nhật Phase 1)
-- [x] **Logic ghép thẻ hoàn chỉnh**
-- [x] **Timer:** millisecond precision
-- [x] Timer bắt đầu khi click thẻ đầu tiên HOẶC khi nhấn "Start Game"
-- [x] `confetti()` khi tất cả thẻ biến mất
-- [x] Màn hình "Ready to Match?" trước khi bắt đầu
-- [x] Nút restart (RotateCcw)
-- [x] `AnimatePresence` + `motion.button` cho animation exit
-- [x] `useNavigate` + `useParams` (không còn callback props sau Phase 1)
+-  `GameCard` interface: `id`, `content`, `type` (`term|definition`), `pairId`, `status`
+-  `initGame()`: tách cards thành term + definition, xáo trộn ngẫu nhiên (dùng `set.flashcards` — đã cập nhật Phase 1)
+-  **Logic ghép thẻ hoàn chỉnh**
+-  **Timer:** millisecond precision
+-  Timer bắt đầu khi click thẻ đầu tiên HOẶC khi nhấn "Start Game"
+-  `confetti()` khi tất cả thẻ biến mất
+-  Màn hình "Ready to Match?" trước khi bắt đầu
+-  Nút restart (RotateCcw)
+-  `AnimatePresence` + `motion.button` cho animation exit
+-  `useNavigate` + `useParams` (không còn callback props sau Phase 1)
 - [ ] **Chưa:** Giới hạn 6-8 cặp thay vì dùng all cards
 - [ ] **Chưa:** Màn hình kết quả (hiện chỉ có confetti)
 - [ ] **Chưa:** Personal Best lưu vào DB

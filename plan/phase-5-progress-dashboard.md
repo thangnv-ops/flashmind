@@ -10,26 +10,26 @@ Hoàn thiện Dashboard với dữ liệu thực từ DB, xây dựng hệ thố
 ## Trạng thái hiện tại (Đã làm)
 
 ### Dashboard (`src/pages/Dashboard.tsx`)
-- [x] Header "Welcome back!" + nút Filter + nút Create Set
-- [x] Section "Recent Activity" với `StudySetCard` grid (3 cột)
-- [x] Loading skeleton (1.2s artificial delay)
-- [x] Section "Your Folders" (chỉ có nút "New Folder", hoàn toàn tĩnh)
-- [x] `useNavigate` thay thế callback props (Phase 1)
-- [x] Dữ liệu từ `MOCK_SETS` — **chưa có DB**
+-  Header "Welcome back!" + nút Filter + nút Create Set
+-  Section "Recent Activity" với `StudySetCard` grid (3 cột)
+-  Loading skeleton (1.2s artificial delay)
+-  Section "Your Folders" (chỉ có nút "New Folder", hoàn toàn tĩnh)
+-  `useNavigate` thay thế callback props (Phase 1)
+-  Dữ liệu từ `MOCK_SETS` — **chưa có DB**
 - [ ] **Chưa:** Sort/Filter sets
 - [ ] **Chưa:** Search
 - [ ] **Chưa:** Progress % chính xác từ DB
 
 ### StudySetCard (`src/components/dashboard/StudySetCard.tsx`)
-- [x] Title, card count, progress bar (Phase 1 đã cập nhật: `flashcards?.length`, `progressPercent`)
-- [x] Nút Flashcards + Match dùng callback (Phase 1 đã giữ callbacks từ Dashboard)
-- [x] `author` field đã bị **xóa** — hiển thị "You" hardcoded
+-  Title, card count, progress bar (Phase 1 đã cập nhật: `flashcards?.length`, `progressPercent`)
+-  Nút Flashcards + Match dùng callback (Phase 1 đã giữ callbacks từ Dashboard)
+-  `author` field đã bị **xóa** — hiển thị "You" hardcoded
 - [ ] **Chưa:** `progressPercent` tính từ bảng `progress` trong DB
 - [ ] **Chưa:** `last_accessed` hiển thị timestamp
 
 ### Sidebar (`src/components/layout/Sidebar.tsx`) — Đã cập nhật Phase 1
-- [x] `useNavigate` cho nav items
-- [x] `MOCK_FOLDERS` hiển thị (vẫn dùng mock)
+-  `useNavigate` cho nav items
+-  `MOCK_FOLDERS` hiển thị (vẫn dùng mock)
 - [ ] **Chưa:** Load folders từ DB
 - [ ] **Chưa:** Navigation đúng theo route active state
 

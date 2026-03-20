@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StudySetCard } from '../components/dashboard/StudySetCard';
 import { FolderCard } from '../components/folders/FolderCard';
@@ -9,7 +9,7 @@ import { useFolders } from '../hooks/useFolders';
 import { useAuth } from '../contexts/AuthContext';
 import type { StudySet } from '../types';
 import type { FolderWithCount } from '../hooks/useFolders';
-import { Plus, Clock, Filter, FolderPlus, Loader2 } from 'lucide-react';
+import { Plus, Clock, Filter, FolderPlus, Loader2, X, ChevronDown } from 'lucide-react';
 import { StudySetCardSkeleton } from '../components/ui/Skeleton';
 
 export const Dashboard: React.FC = () => {
@@ -27,6 +27,10 @@ export const Dashboard: React.FC = () => {
   const [sets, setSets] = useState<StudySet[]>([]);
   const [folders, setFolders] = useState<FolderWithCount[]>([]);
   const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'last_accessed' | 'title' | 'progress'>('last_accessed');
+  const [filterBy, setFilterBy] = useState<'all' | 'in_progress' | 'mastered' | 'new'>('all');
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     const [fetchedSets, fetchedFolders] = await Promise.all([
@@ -86,7 +90,26 @@ export const Dashboard: React.FC = () => {
     }
   };
 
+  const filteredSets = useMemo(() => {
+    let result = [...sets];
+    if (selectedFolder) result = result.filter(s => s.folder_id === selectedFolder);
+    if (filterBy === 'in_progress') result = result.filter(s => (s.progressPercent ?? 0) > 0 && (s.progressPercent ?? 0) < 80);
+    else if (filterBy === 'mastered') result = result.filter(s => (s.progressPercent ?? 0) >= 80);
+    else if (filterBy === 'new') result = result.filter(s => (s.progressPercent ?? 0) === 0);
+    result.sort((a, b) => {
+      if (sortBy === 'title') return a.title.localeCompare(b.title);
+      if (sortBy === 'progress') return (b.progressPercent ?? 0) - (a.progressPercent ?? 0);
+      return new Date(b.last_accessed).getTime() - new Date(a.last_accessed).getTime();
+    });
+    return result;
+  }, [sets, sortBy, filterBy, selectedFolder]);
+
+  const isFiltered = filterBy !== 'all' || selectedFolder !== null || sortBy !== 'last_accessed';
+
   const isLoading = setsLoading && sets.length === 0;
+
+  const SORT_LABELS = { last_accessed: 'Last accessed', title: 'Alphabetical', progress: 'Progress' };
+  const FILTER_LABELS = { all: 'All sets', in_progress: 'In progress', mastered: 'Mastered (≥80%)', new: 'Not started' };
 
   return (
     <div className="p-8 max-w-7xl mx-auto w-full">
@@ -97,10 +120,86 @@ export const Dashboard: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">
-            <Filter className="w-4 h-4" />
-            Filter
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setFilterOpen(v => !v)}
+              className={`flex items-center gap-2 px-4 py-2 border rounded-lg text-sm font-semibold transition-colors ${
+                isFiltered ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              Filter
+              {isFiltered && <span className="w-2 h-2 rounded-full bg-white/70" />}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {filterOpen && (
+              <div className="absolute right-0 top-11 z-20 bg-white border rounded-xl shadow-lg p-4 w-64 text-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="font-bold text-slate-700">Filter & Sort</span>
+                  {isFiltered && (
+                    <button
+                      onClick={() => { setSortBy('last_accessed'); setFilterBy('all'); setSelectedFolder(null); }}
+                      className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Reset
+                    </button>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Sort by</p>
+                  {(['last_accessed', 'title', 'progress'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setSortBy(opt)}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg transition-colors ${
+                        sortBy === opt ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      {SORT_LABELS[opt]}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Filter by</p>
+                  {(['all', 'new', 'in_progress', 'mastered'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setFilterBy(opt)}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg transition-colors ${
+                        filterBy === opt ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      {FILTER_LABELS[opt]}
+                    </button>
+                  ))}
+                </div>
+                {folders.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">Folder</p>
+                    <button
+                      onClick={() => setSelectedFolder(null)}
+                      className={`w-full text-left px-3 py-1.5 rounded-lg transition-colors ${
+                        selectedFolder === null ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      All folders
+                    </button>
+                    {folders.map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setSelectedFolder(f.id)}
+                        className={`w-full text-left px-3 py-1.5 rounded-lg transition-colors ${
+                          selectedFolder === f.id ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-slate-50 text-slate-700'
+                        }`}
+                      >
+                        {f.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => navigate('/editor')}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary-dark transition-colors shadow-sm"
@@ -122,16 +221,25 @@ export const Dashboard: React.FC = () => {
             Array(3).fill(0).map((_, i) => <StudySetCardSkeleton key={i} />)
           ) : (
             <>
-              {sets.map(set => (
+              {filteredSets.map(set => (
                 <StudySetCard
                   key={set.id}
                   set={set}
-                  onClick={id => navigate(`/flashcards/${id}`)}
+                  onClick={id => navigate(`/sets/${id}`)}
                   onPlayMatch={id => navigate(`/match/${id}`)}
+                  onLearn={id => navigate(`/learn/${id}`)}
+                  onWrite={id => navigate(`/write/${id}`)}
+                  onTest={id => navigate(`/test/${id}`)}
                   onEdit={handleEditSet}
                   onDelete={handleDeleteSet}
                 />
               ))}
+              {filteredSets.length === 0 && !isLoading && (
+                <div className="col-span-3 text-center py-12 text-slate-400">
+                  <p className="font-medium">No sets match the current filter.</p>
+                  <button onClick={() => { setFilterBy('all'); setSelectedFolder(null); }} className="text-primary text-sm font-bold hover:underline mt-2">Clear filters</button>
+                </div>
+              )}
               <button
                 onClick={() => navigate('/editor')}
                 className="border-2 border-dashed border-slate-200 rounded-xl p-5 flex flex-col items-center justify-center gap-3 text-slate-400 hover:border-primary/40 hover:text-primary transition-all group min-h-[180px]"

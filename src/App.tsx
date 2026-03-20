@@ -7,6 +7,10 @@ import { Dashboard } from './pages/Dashboard';
 import { SetEditor } from './pages/SetEditor';
 import { FlashcardView } from './pages/FlashcardView';
 import { MatchGame } from './pages/MatchGame';
+import { LearnMode } from './pages/LearnMode';
+import { WriteMode } from './pages/WriteMode';
+import { MockTest } from './pages/MockTest';
+import { SetOverview } from './pages/SetOverview';
 import { AuthPage } from './pages/AuthPage';
 
 // Banner shown when running without a real Supabase project
@@ -55,7 +59,11 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/editor" element={<SetEditor />} />
           <Route path="/editor/:setId" element={<SetEditor />} />
+          <Route path="/sets/:setId" element={<SetOverview />} />
           <Route path="/flashcards/:setId" element={<FlashcardView />} />
+          <Route path="/learn/:setId" element={<LearnMode />} />
+          <Route path="/write/:setId" element={<WriteMode />} />
+          <Route path="/test/:setId" element={<MockTest />} />
           <Route path="/match/:setId" element={<MatchGame />} />
         </Route>
 

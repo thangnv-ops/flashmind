@@ -16,6 +16,7 @@ import { ToastContainer, useToast } from '../components/common/Toast';
 import { useStudySets } from '../hooks/useStudySets';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, isMockMode } from '../lib/supabase';
+import { uploadToMinio, deleteFromMinio, isMinioConfigured } from '../lib/minio';
 import { cn } from '../lib/utils';
 
 interface CardRow {
@@ -137,16 +138,24 @@ export const SetEditor: React.FC = () => {
     try {
       const userId = user?.id ?? 'unknown';
       const storagePath = `${userId}/${editSetId ?? 'new'}/${rowId}-${Date.now()}`;
-      const { error } = await supabase.storage
-        .from('flashcard-images')
-        .upload(storagePath, file, { contentType: file.type, upsert: true });
-      if (error) throw error;
-      const { data: urlData } = supabase.storage
-        .from('flashcard-images')
-        .getPublicUrl(storagePath);
+      let publicUrl: string;
+
+      if (isMinioConfigured) {
+        publicUrl = await uploadToMinio(storagePath, file);
+      } else {
+        const { error } = await supabase.storage
+          .from('flashcard-images')
+          .upload(storagePath, file, { contentType: file.type, upsert: true });
+        if (error) throw error;
+        const { data: urlData } = supabase.storage
+          .from('flashcard-images')
+          .getPublicUrl(storagePath);
+        publicUrl = urlData.publicUrl;
+      }
+
       setRows(prev =>
         prev.map(r =>
-          r.id === rowId ? { ...r, image_url: urlData.publicUrl, uploading: false } : r,
+          r.id === rowId ? { ...r, image_url: publicUrl, uploading: false } : r,
         ),
       );
     } catch (e: any) {
@@ -157,12 +166,22 @@ export const SetEditor: React.FC = () => {
 
   const removeImage = async (rowId: string, imageUrl: string) => {
     setRows(prev => prev.map(r => (r.id === rowId ? { ...r, image_url: null } : r)));
-    if (isMockMode || !imageUrl.includes('supabase')) return;
+    if (isMockMode) return;
     try {
-      const url = new URL(imageUrl);
-      const pathParts = url.pathname.split('/flashcard-images/');
-      if (pathParts.length > 1) {
-        await supabase.storage.from('flashcard-images').remove([pathParts[1]]);
+      if (isMinioConfigured) {
+        // Extract storage key from the public URL
+        const url = new URL(imageUrl);
+        // URL format: <endpoint>/<bucket>/<key>
+        const pathParts = url.pathname.split('/').slice(2); // remove leading slash + bucket
+        if (pathParts.length > 0) {
+          await deleteFromMinio(pathParts.join('/'));
+        }
+      } else if (imageUrl.includes('supabase')) {
+        const url = new URL(imageUrl);
+        const pathParts = url.pathname.split('/flashcard-images/');
+        if (pathParts.length > 1) {
+          await supabase.storage.from('flashcard-images').remove([pathParts[1]]);
+        }
       }
     } catch {
       // best-effort cleanup

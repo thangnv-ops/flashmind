@@ -7,8 +7,11 @@ import {
   RotateCcw,
   Play,
   Loader2,
+  Zap,
 } from 'lucide-react';
 import { useStudySets } from '../hooks/useStudySets';
+import { useMatchRecords } from '../hooks/useMatchRecords';
+import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
 import type { StudySet } from '../types';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,10 +25,30 @@ interface GameCard {
   status: 'idle' | 'selected' | 'correct' | 'wrong';
 }
 
+const ROUND_OPTIONS = [6, 8, 10] as const;
+type RoundOption = typeof ROUND_OPTIONS[number];
+
+function selectGameCards(all: { id: string; term: string; definition: string }[], count: number) {
+  if (all.length <= count) return all;
+  return [...all].sort(() => Math.random() - 0.5).slice(0, count);
+}
+
+function fireSideConfetti() {
+  const end = Date.now() + 3000;
+  const frame = () => {
+    confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, zIndex: 9999 });
+    confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, zIndex: 9999 });
+    if (Date.now() < end) requestAnimationFrame(frame);
+  };
+  frame();
+}
+
 export const MatchGame: React.FC = () => {
   const navigate = useNavigate();
   const { setId } = useParams<{ setId: string }>();
   const { getStudySet } = useStudySets();
+  const { getPersonalBest, updatePersonalBest } = useMatchRecords();
+  useUpdateLastAccessed(setId);
 
   const [studySet, setStudySet] = useState<StudySet | null>(null);
   const [loadingSet, setLoadingSet] = useState(true);
@@ -34,6 +57,12 @@ export const MatchGame: React.FC = () => {
   const [time, setTime] = useState(0);
   const [isActive, setIsActive] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  const [mistakes, setMistakes] = useState(0);
+  const [finishedTime, setFinishedTime] = useState(0);
+  const [personalBest, setPersonalBest] = useState<number | null>(null);
+  const [previousBest, setPreviousBest] = useState<number | null>(null);
+  const [isNewRecord, setIsNewRecord] = useState(false);
+  const [cardsPerRound, setCardsPerRound] = useState<RoundOption>(8);
   const timerRef = useRef<any>(null);
 
   useEffect(() => {
@@ -46,10 +75,18 @@ export const MatchGame: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId]);
 
+  // Load personal best once set is known
+  useEffect(() => {
+    if (!setId) return;
+    getPersonalBest(setId).then(best => setPersonalBest(best));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setId]);
+
   const initGame = useCallback(() => {
     if (!studySet) return;
+    const chosen = selectGameCards(studySet.flashcards ?? [], cardsPerRound);
     const gameCards: GameCard[] = [];
-    (studySet.flashcards ?? []).forEach(card => {
+    chosen.forEach(card => {
       gameCards.push({
         id: `term-${card.id}`,
         content: card.term,
@@ -71,11 +108,20 @@ export const MatchGame: React.FC = () => {
     setIsActive(false);
     setIsFinished(false);
     setSelected(null);
-  }, [studySet]);
+    setMistakes(0);
+    setFinishedTime(0);
+    setIsNewRecord(false);
+  }, [studySet, cardsPerRound]);
 
   useEffect(() => {
     if (studySet) initGame();
   }, [initGame, studySet]);
+
+  // Re-init when cardsPerRound changes on the ready screen
+  useEffect(() => {
+    if (studySet && !isActive && !isFinished) initGame();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardsPerRound]);
 
   useEffect(() => {
     if (isActive && !isFinished) {
@@ -115,22 +161,35 @@ export const MatchGame: React.FC = () => {
       // Check if all matched
       const remaining = cards.filter(c => c.status === 'idle' || c.status === 'selected').length - 2;
       if (remaining === 0) {
+        const finalTime = time;
         setIsFinished(true);
-        confetti({
-          particleCount: 200,
-          spread: 100,
-          origin: { y: 0.6 }
-        });
+        setFinishedTime(finalTime);
+        // Check personal best optimistically, fire confetti
+        if (setId) {
+          updatePersonalBest(setId, finalTime).then(isNew => {
+            setIsNewRecord(isNew);
+            if (isNew) {
+              setPreviousBest(personalBest);
+              setPersonalBest(finalTime);
+              fireSideConfetti();
+            } else {
+              confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+            }
+          });
+        } else {
+          confetti({ particleCount: 200, spread: 100, origin: { y: 0.6 } });
+        }
       }
     } else {
       // Wrong match
-      setCards(prev => prev.map(c => 
+      setMistakes(prev => prev + 1);
+      setCards(prev => prev.map(c =>
         c.id === card.id || c.id === selected.id ? { ...c, status: 'wrong' } : c
       ));
       setSelected(null);
-      
+
       setTimeout(() => {
-        setCards(prev => prev.map(c => 
+        setCards(prev => prev.map(c =>
           c.status === 'wrong' ? { ...c, status: 'idle' } : c
         ));
       }, 500);
@@ -173,17 +232,25 @@ export const MatchGame: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
+          {/* Personal best */}
+          <div className="flex items-center gap-1.5 text-sm text-white/40">
+            <Trophy className="w-4 h-4 text-yellow-400/70" />
+            <span className="font-mono">{personalBest !== null ? formatTime(personalBest) : '--'}</span>
+          </div>
+
+          {/* Timer */}
           <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/10">
             <Timer className="w-4 h-4 text-primary" />
             <span className="font-mono font-bold text-xl tabular-nums w-20 text-center">
               {formatTime(time)}
             </span>
           </div>
-          
-          <button 
+
+          <button
             onClick={initGame}
             className="p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+            title="Restart"
           >
             <RotateCcw className="w-5 h-5" />
           </button>
@@ -198,7 +265,33 @@ export const MatchGame: React.FC = () => {
             </div>
             <h1 className="text-4xl font-bold">Ready to Match?</h1>
             <p className="text-white/60">Match all terms with their definitions as fast as you can. Click any card to start the timer!</p>
-            <button 
+
+            {/* Round size selector — only show when set has more than 6 cards */}
+            {(studySet?.flashcards?.length ?? 0) > 6 && (
+              <div className="flex flex-col items-center gap-2">
+                <p className="text-xs font-bold text-white/40 uppercase tracking-widest">Cards per round</p>
+                <div className="flex gap-2">
+                  {ROUND_OPTIONS.map(n => (
+                    <button
+                      key={n}
+                      onClick={() => setCardsPerRound(n)}
+                      disabled={(studySet?.flashcards?.length ?? 0) < n}
+                      className={cn(
+                        'w-12 h-10 rounded-lg font-bold text-sm transition-all',
+                        cardsPerRound === n
+                          ? 'bg-primary text-white'
+                          : 'bg-white/10 text-white/60 hover:bg-white/20',
+                        (studySet?.flashcards?.length ?? 0) < n && 'opacity-30 cursor-not-allowed'
+                      )}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
               onClick={() => setIsActive(true)}
               className="px-8 py-3 bg-primary hover:bg-primary-dark rounded-xl font-bold text-lg transition-all shadow-lg shadow-primary/20"
             >
@@ -207,7 +300,7 @@ export const MatchGame: React.FC = () => {
           </div>
         )}
 
-        {isActive && (
+        {isActive && !isFinished && (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 w-full max-w-6xl">
             <AnimatePresence>
               {cards.map((card) => (
@@ -241,34 +334,69 @@ export const MatchGame: React.FC = () => {
         )}
 
         {isFinished && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-center space-y-8 bg-white/5 p-12 rounded-3xl border border-white/10 backdrop-blur-xl"
+            className="text-center space-y-6 bg-white/5 p-12 rounded-3xl border border-white/10 backdrop-blur-xl max-w-md w-full"
           >
-            <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto text-yellow-500">
-              <Trophy className="w-12 h-12" />
-            </div>
+            {isNewRecord ? (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-full border border-yellow-400/30">
+                  <Zap className="w-5 h-5 text-yellow-400" />
+                  <span className="font-bold text-yellow-300 text-sm">New Personal Best!</span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-24 h-24 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto text-yellow-500">
+                <Trophy className="w-12 h-12" />
+              </div>
+            )}
+
             <div>
-              <h2 className="text-5xl font-bold mb-2">Great Job!</h2>
-              <p className="text-white/40 text-lg">You cleared the board in</p>
-              <p className="text-6xl font-bold text-primary font-mono mt-4">
-                {formatTime(time)}
+              <h2 className="text-3xl font-bold mb-1">{isNewRecord ? '🎉 Amazing!' : 'Great Job!'}</h2>
+              <p className="text-white/40 text-sm">You cleared the board in</p>
+              <p className="text-6xl font-bold text-primary font-mono mt-3">
+                {formatTime(finishedTime)}
               </p>
             </div>
-            
+
+            {/* Personal best comparison */}
+            {!isNewRecord && personalBest !== null && (
+              <p className="text-white/40 text-sm">
+                Best: {formatTime(personalBest)}&ensp;·&ensp;
+                <span className="text-red-400">+{formatTime(finishedTime - personalBest)} slower</span>
+              </p>
+            )}
+            {isNewRecord && previousBest !== null && (
+              <p className="text-white/40 text-sm">
+                Previous best: {formatTime(previousBest)}&ensp;
+                <span className="text-green-400">({formatTime(previousBest - finishedTime)} faster!)</span>
+              </p>
+            )}
+
+            {/* Mistakes */}
+            <div className="flex items-center justify-center gap-3 text-sm">
+              <div className={cn(
+                'px-3 py-1.5 rounded-full font-bold',
+                mistakes === 0 ? 'bg-green-500/20 text-green-400' : 'bg-red-500/10 text-red-400'
+              )}>
+                {mistakes === 0 ? '✓ No mistakes!' : `${mistakes} mistake${mistakes === 1 ? '' : 's'}`}
+              </div>
+            </div>
+
             <div className="flex items-center justify-center gap-4">
-              <button 
+              <button
                 onClick={initGame}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all"
+                className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-xl font-bold transition-all flex items-center gap-2"
               >
+                <RotateCcw className="w-4 h-4" />
                 Play Again
               </button>
-              <button 
+              <button
                 onClick={() => navigate('/dashboard')}
-                className="px-8 py-3 bg-primary hover:bg-primary-dark rounded-xl font-bold transition-all"
+                className="px-6 py-3 bg-primary hover:bg-primary-dark rounded-xl font-bold transition-all"
               >
-                Back to Dashboard
+                Dashboard
               </button>
             </div>
           </motion.div>
