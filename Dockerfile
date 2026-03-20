@@ -14,15 +14,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-# Copy .env.local so Vite can read VITE_* vars at build time
+# Copy placeholder env so Vite has VITE_* keys at build time (no real secrets).
+# docker-entrypoint.sh replaces the placeholder strings at container start.
 COPY .env.example .env.local
 
 COPY . .
-RUN npm run build
+RUN npm run build && rm -f .env.local
 
-# Remove secrets from final image after build
-RUN rm -f .env.local
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 EXPOSE 4173
 
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "4173"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
