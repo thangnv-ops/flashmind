@@ -11,14 +11,15 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Build-time env vars (Vite inlines these into the bundle)
+# Build-time env vars — values are supplied via docker-compose build.args
+# which reads from the .env file on the host. Nothing is hardcoded here.
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_MINIO_ENDPOINT
 ARG VITE_MINIO_ACCESS_KEY
 ARG VITE_MINIO_SECRET_KEY
-ARG VITE_MINIO_BUCKET=flashcard-images
-ARG VITE_MINIO_REGION=us-east-1
+ARG VITE_MINIO_BUCKET
+ARG VITE_MINIO_REGION
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
     VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
