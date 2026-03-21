@@ -6,9 +6,11 @@ import type { Flashcard } from '../types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 export const SESSION_SIZE = 10;
-const URGENT_SLOTS   = 4;  // Bucket A: 40%
-const REVIEW_SLOTS   = 4;  // Bucket B: 40%
-const NEW_SLOTS      = 2;  // Bucket C: 20%
+const URGENT_SLOTS = 4;  // Bucket A: max 4 slots
+const REVIEW_SLOTS = 4;  // Bucket B: max 4 slots
+// Bucket C fills ALL remaining slots (SESSION_SIZE - actual A - actual B),
+// capped by the daily new-card limit. When there are 0 urgent + 0 review
+// cards (e.g. brand-new set), all 10 slots are filled with new cards.
 export const DEFAULT_DAILY_NEW_LIMIT = 20;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -113,12 +115,8 @@ export function useLearningQueue(
         .eq('event_type', 'learned')
         .eq('logged_at',  today);
 
-      const newCount      = newTodayCount ?? 0;
-      const newSlotsLeft  = Math.max(0, dailyNewLimit - newCount);
-      // Effective new slots for this session (capped at daily remaining)
-      const effectiveNew  = Math.min(NEW_SLOTS, newSlotsLeft);
-      // Redistribute unused C slots to Bucket B
-      const effectiveReview = REVIEW_SLOTS + (NEW_SLOTS - effectiveNew);
+      const newCount     = newTodayCount ?? 0;
+      const newSlotsLeft = Math.max(0, dailyNewLimit - newCount);
 
       // ── Bucket A: mastery 1-2 AND overdue ───────────────────────────────
       const { data: urgentRows } = await supabase
@@ -149,12 +147,16 @@ export function useLearningQueue(
         .gte('mastery_level',  3)
         .lte('next_review_at', now)
         .order('next_review_at', { ascending: true })
-        .limit(effectiveReview);
+        .limit(REVIEW_SLOTS);
 
-      // ── Bucket C: flashcards with NO progress row yet ─────────────────────
+      // ── Bucket C: new cards fill ALL remaining slots ──────────────────────
+      // remaining = SESSION_SIZE - actual A - actual B, capped by daily limit
+      const urgentFetched = (urgentRows ?? []).length;
+      const reviewFetched = (reviewRows ?? []).length;
+      const newLimit      = Math.min(SESSION_SIZE - urgentFetched - reviewFetched, newSlotsLeft);
+
       let finalNew: QueuedCard[] = [];
-      if (effectiveNew > 0) {
-        // Fetch IDs of cards that already have a progress row for this set
+      if (newLimit > 0) {
         const { data: seenProgress } = await supabase
           .from('progress')
           .select('card_id')
@@ -163,17 +165,16 @@ export function useLearningQueue(
 
         const seenIds = new Set((seenProgress ?? []).map((p: any) => p.card_id as string));
 
-        // Pull flashcards in position order, filtering out already-seen ones
         const { data: allFlashcards } = await supabase
           .from('flashcards')
           .select('id, set_id, term, definition, image_url, is_starred, position')
           .eq('set_id', setId)
           .order('position', { ascending: true })
-          .limit(effectiveNew + seenIds.size + 20); // fetch extra for client-side filter
+          .limit(newLimit + seenIds.size + 20);
 
         finalNew = (allFlashcards ?? [])
           .filter((fc: any) => !seenIds.has(fc.id as string))
-          .slice(0, effectiveNew)
+          .slice(0, newLimit)
           .map((fc: any): QueuedCard => ({
             id:          fc.id,
             set_id:      fc.set_id,
@@ -204,8 +205,7 @@ export function useLearningQueue(
       let urgentCards: QueuedCard[] = (urgentRows ?? []).map(r => mapProgress(r, 'urgent'));
       let reviewCards: QueuedCard[] = (reviewRows ?? []).map(r => mapProgress(r, 'review'));
 
-      // ── Fallback: fill underflowing buckets from lower-priority ones ─────
-      // Urgent underflow → promote review cards
+      // ── Fallback: urgent underflow → relabel review cards as urgent ──────
       const urgentUnderflow = URGENT_SLOTS - urgentCards.length;
       if (urgentUnderflow > 0 && reviewCards.length > 0) {
         const promoted = reviewCards
@@ -213,16 +213,6 @@ export function useLearningQueue(
           .map(c => ({ ...c, bucket: 'urgent' as CardBucket }));
         urgentCards = [...urgentCards, ...promoted];
         reviewCards = reviewCards.slice(urgentUnderflow);
-      }
-
-      // Review underflow → promote new cards
-      const reviewUnderflow = effectiveReview - reviewCards.length;
-      if (reviewUnderflow > 0 && finalNew.length > 0) {
-        const promoted = finalNew
-          .slice(0, reviewUnderflow)
-          .map(c => ({ ...c, bucket: 'review' as CardBucket }));
-        reviewCards = [...reviewCards, ...promoted];
-        finalNew    = finalNew.slice(reviewUnderflow);
       }
 
       const combined = [...urgentCards, ...reviewCards, ...finalNew];

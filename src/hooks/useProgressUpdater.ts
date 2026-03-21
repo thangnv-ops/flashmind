@@ -110,8 +110,9 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
         );
 
         // 4. Write daily_log events
-        //    'learned'  = card enters "đang học" for the first time (no prior progress row)
-        //    'forgotten' = wrong answer on a mastered card (prev mastery >= 8)
+        //    'learned'   = card seen for the first time (no prior progress row)
+        //    'forgotten' = any wrong answer on an existing card (deduped to once per card per day)
+        //    'reviewed'  = correct answer on an existing card (deduped to once per card per day)
         const today = todayVN();
 
         if (!existing) {
@@ -126,8 +127,10 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
             },
             { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
           );
-        } else if (!isCorrect && snapshot.mastery_level >= 8) {
-          // Card was mastered (≥ 8) but user got it wrong → "đã quên"
+        } else if (!isCorrect) {
+          // Any wrong answer on an existing card → "đã quên"
+          // ignoreDuplicates ensures each card is only counted as forgotten once per day,
+          // even when the intensive loop re-queues it and the user answers wrong again.
           await supabase.from('daily_log').upsert(
             {
               user_id:    user.id,
@@ -138,8 +141,8 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
             },
             { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
           );
-        } else if (existing && snapshot.mastery_level >= 1 && snapshot.mastery_level < 8) {
-          // Card is in "đang học" range — log a 'reviewed' event once per card per day
+        } else {
+          // Correct answer on an existing card — log 'reviewed' once per card per day
           await supabase.from('daily_log').upsert(
             {
               user_id:    user.id,

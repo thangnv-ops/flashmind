@@ -52,12 +52,15 @@ export const WriteMode: React.FC = () => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userInput, setUserInput] = useState('');
   const [status, setStatus] = useState<AnswerStatus>('idle');
-  const [results, setResults] = useState<boolean[]>([]);    // one per card: correct?
+  const [results, setResults] = useState<boolean[]>([]);
   const [isFinished, setIsFinished] = useState(false);
-  const [wrongAttempts, setWrongAttempts] = useState(0);
-  const [revealedIndices, setRevealedIndices] = useState<Set<number>>(new Set());
   const [masteryUpdates, setMasteryUpdates] = useState<Record<string, number>>({});
+  // Per-card wrong attempt count + revealed hint indices (persist across re-queues)
+  const [wrongPerCard, setWrongPerCard]       = useState<Record<string, number>>({});
+  const [revealedPerCard, setRevealedPerCard] = useState<Record<string, Set<number>>>({});
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Tracks unique card IDs answered correctly — session ends when size >= sessionTotal
+  const uniqueCorrectRef = useRef<Set<string>>(new Set());
 
   // Clear auto-next timer on unmount
   useEffect(() => {
@@ -93,23 +96,33 @@ export const WriteMode: React.FC = () => {
   useEffect(() => {
     if (isFinished) {
       const correctCount = results.filter(Boolean).length;
-      if (correctCount === cards.length) {
+      if (correctCount >= Math.max(1, sessionTotal || cards.length)) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#2563eb', '#10b981', '#f59e0b'] });
       }
     }
-  }, [isFinished, results, cards.length]);
+  }, [isFinished]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentCard = cards[currentIdx];
 
-  const advanceCard = () => {
+  // wasCorrect=true: card answered correctly → track & check session completion
+  // wasCorrect=false: wrong → just advance (card already pushed to end)
+  const advanceCard = (wasCorrect = true) => {
     if (autoNextTimerRef.current) {
       clearTimeout(autoNextTimerRef.current);
       autoNextTimerRef.current = null;
     }
-    // Mark card as correctly answered in the queue (updates QueueIndicator counts)
-    if (currentCard) queueAnswerCorrect(currentCard.id);
-    setWrongAttempts(0);
-    setRevealedIndices(new Set());
+    if (wasCorrect && currentCard) {
+      queueAnswerCorrect(currentCard.id);
+      if (!uniqueCorrectRef.current.has(currentCard.id)) {
+        uniqueCorrectRef.current = new Set([...uniqueCorrectRef.current, currentCard.id]);
+      }
+      // Session complete: every original card answered correctly at least once
+      if (sessionTotal > 0 && uniqueCorrectRef.current.size >= sessionTotal) {
+        setIsFinished(true);
+        finishSession(sessionTotal);
+        return;
+      }
+    }
     if (currentIdx < cards.length - 1) {
       setCurrentIdx(prev => prev + 1);
       setUserInput('');
@@ -126,45 +139,42 @@ export const WriteMode: React.FC = () => {
     const isCorrect = result === 'correct' || result === 'almost';
     setStatus(result);
     if (isCorrect) {
-      // Only record on the first attempt
-      if (wrongAttempts === 0) {
-        setResults(prev => [...prev, true]);
-        recordResult(currentCard.id, true);
-        submitAnswer(currentCard.id, true, 'write', setId!).then(r => {
-          if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
-        });
-      }
-      // Auto-advance after 1 second
-      autoNextTimerRef.current = setTimeout(advanceCard, 1000);
+      setResults(prev => [...prev, true]);
+      recordResult(currentCard.id, true);
+      submitAnswer(currentCard.id, true, 'write', setId!).then(r => {
+        if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
+      });
+      // Auto-advance after showing correct feedback
+      autoNextTimerRef.current = setTimeout(() => advanceCard(true), 1000);
     } else {
-      // Record wrong only on first attempt
-      if (wrongAttempts === 0) {
+      // Record wrong result only on first encounter (DB dedup handles re-queues)
+      if (!(wrongPerCard[currentCard.id] ?? 0)) {
         setResults(prev => [...prev, false]);
         recordResult(currentCard.id, false);
         submitAnswer(currentCard.id, false, 'write', setId!).then(r => {
           if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
         });
       }
-      const nextWrongCount = wrongAttempts + 1;
-      setWrongAttempts(nextWrongCount);
-      // Reveal one new random character as hint
-      setRevealedIndices(prev => {
-        const term = currentCard.term;
-        const unrevealed = Array.from({ length: term.length }, (_, i) => i)
-          .filter(i => term[i] !== ' ' && !prev.has(i));
+      // Increment per-card wrong count
+      const prevWrong = wrongPerCard[currentCard.id] ?? 0;
+      setWrongPerCard(prev => ({ ...prev, [currentCard.id]: prevWrong + 1 }));
+      // Reveal one new random hint character for this card
+      setRevealedPerCard(prev => {
+        const existing = prev[currentCard.id] ?? new Set<number>();
+        const unrevealed = Array.from({ length: currentCard.term.length }, (_, i) => i)
+          .filter(i => currentCard.term[i] !== ' ' && !existing.has(i));
         if (unrevealed.length === 0) return prev;
         const pick = unrevealed[Math.floor(Math.random() * unrevealed.length)];
-        return new Set([...prev, pick]);
+        return { ...prev, [currentCard.id]: new Set([...existing, pick]) };
       });
-      // Reset to idle after 0.8s so user can try again
-      autoNextTimerRef.current = setTimeout(() => {
-        setStatus('idle');
-        setUserInput('');
-      }, 800);
+      // Intensive loop: push card to end — shown again later
+      setCards(prev => [...prev, currentCard]);
+      // Auto-advance after showing "incorrect + answer" feedback
+      autoNextTimerRef.current = setTimeout(() => advanceCard(false), 1400);
     }
   };
 
-  const handleNext = () => advanceCard();
+  const handleNext = () => advanceCard(true);
 
   const handleOverride = () => {
     if (autoNextTimerRef.current) {
@@ -177,7 +187,12 @@ export const WriteMode: React.FC = () => {
       return updated;
     });
     setStatus('overridden');
-    autoNextTimerRef.current = setTimeout(advanceCard, 1000);
+    // Remove the card we just pushed to end (override = user claims correct)
+    setCards(prev => prev.slice(0, -1));
+    // Clear per-card wrong data so hint doesn't linger
+    setWrongPerCard(prev => { const u = { ...prev }; delete u[currentCard.id]; return u; });
+    setRevealedPerCard(prev => { const u = { ...prev }; delete u[currentCard.id]; return u; });
+    autoNextTimerRef.current = setTimeout(() => advanceCard(true), 1000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -191,15 +206,16 @@ export const WriteMode: React.FC = () => {
       clearTimeout(autoNextTimerRef.current);
       autoNextTimerRef.current = null;
     }
-    setWrongAttempts(0);
-    setRevealedIndices(new Set());
     setCards([]);
     setCurrentIdx(0);
     setUserInput('');
     setStatus('idle');
     setResults([]);
     setMasteryUpdates({});
+    setWrongPerCard({});
+    setRevealedPerCard({});
     setIsFinished(false);
+    uniqueCorrectRef.current = new Set();
     refetchQueue();
   };
 
@@ -294,7 +310,7 @@ export const WriteMode: React.FC = () => {
   const feedback: { text: string; color: string } | null = {
     correct: { text: 'Correct! ✓', color: 'text-green-600' },
     almost: { text: `Almost! Correct answer: "${currentCard.term}"`, color: 'text-amber-600' },
-    wrong: { text: 'Incorrect! Try again.', color: 'text-red-600' },
+    wrong: { text: `Incorrect! Đáp án: "${currentCard.term}" — sẽ hỏi lại sau.`, color: 'text-red-600' },
     overridden: { text: 'Marked as correct.', color: 'text-green-600' },
     idle: null,
   }[status];
@@ -397,24 +413,30 @@ export const WriteMode: React.FC = () => {
               </div>
             )}
 
-            {wrongAttempts > 0 && status === 'idle' && (
-              <div className="flex flex-col gap-1 -mt-1">
-                <p className="text-xs text-red-400 font-semibold">
-                  ✗ {wrongAttempts} lần sai — thử lại
-                </p>
-                <div className="flex flex-wrap gap-1 text-sm font-mono">
-                  {Array.from(currentCard.term).map((char, i) =>
-                    char === ' ' ? (
-                      <span key={i} className="w-3" />
-                    ) : revealedIndices.has(i) ? (
-                      <span key={i} className="text-amber-500 font-bold">{char}</span>
-                    ) : (
-                      <span key={i} className="text-slate-300">_</span>
-                    )
-                  )}
+            {/* Character hint — shown when returning to this card after a wrong answer */}
+            {(() => {
+              const cardWrong    = wrongPerCard[currentCard.id] ?? 0;
+              const cardRevealed = revealedPerCard[currentCard.id] ?? new Set<number>();
+              if (cardWrong === 0 || status !== 'idle') return null;
+              return (
+                <div className="flex flex-col gap-1 -mt-1">
+                  <p className="text-xs text-red-400 font-semibold">
+                    ✗ {cardWrong} lần sai — thử lại
+                  </p>
+                  <div className="flex flex-wrap gap-1 text-sm font-mono">
+                    {Array.from(currentCard.term).map((char, i) =>
+                      char === ' ' ? (
+                        <span key={i} className="w-3" />
+                      ) : cardRevealed.has(i) ? (
+                        <span key={i} className="text-amber-500 font-bold">{char}</span>
+                      ) : (
+                        <span key={i} className="text-slate-300">_</span>
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             <div className="flex gap-3">
               {status === 'idle' ? (
                 <button
