@@ -80,7 +80,11 @@ export const SetOverview: React.FC = () => {
   const { user } = useAuth();
   const { dueCards, totalDue } = useReviewQueue(setId);
   const { groups: vocabGroups, loading: vocabLoading } = useVocabStatus(setId);
-  const { sessionTotal: queueTotal, loading: queueCountLoading } = useLearningQueue(setId);
+  const {
+    sessionTotal: queueTotal,
+    counts: queueCounts,
+    loading: queueCountLoading,
+  } = useLearningQueue(setId);
 
   const [set, setSet] = useState<StudySet | null>(null);
   const [loading, setLoading] = useState(true);
@@ -237,28 +241,41 @@ export const SetOverview: React.FC = () => {
           </div>
         )}
 
-        {/* Review Queue banner */}
-        {totalDue > 0 ? (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center justify-between gap-4">
+        {/* Ôn tập hôm nay — hiển thị khi queue có bài */}
+        {!queueCountLoading && queueTotal > 0 ? (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col gap-3">
             <div className="flex items-center gap-3">
               <span className="text-xl">📬</span>
               <div>
                 <p className="font-bold text-blue-700 text-sm">Ôn tập hôm nay</p>
-                <p className="text-blue-500 text-xs">{totalDue} thẻ đến hạn</p>
+                <p className="text-blue-500 text-xs flex flex-wrap gap-x-2">
+                  <span>{queueTotal} thẻ cần học</span>
+                  {queueCounts.urgent > 0 && <span className="text-red-500">🔴 {queueCounts.urgent} cấp cứu</span>}
+                  {queueCounts.review > 0 && <span className="text-blue-400">🔵 {queueCounts.review} ôn tập</span>}
+                  {queueCounts.new > 0 && <span className="text-green-500">🟢 {queueCounts.new} từ mới</span>}
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => navigate(`/flashcards/${setId}`)}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shrink-0"
-            >
-              ▶ Bắt đầu ôn tập
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => navigate(`/learn/${setId}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700 transition-colors"
+              >
+                🧠 Learn
+              </button>
+              <button
+                onClick={() => navigate(`/write/${setId}`)}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors"
+              >
+                ✍️ Write
+              </button>
+            </div>
           </div>
-        ) : (
+        ) : !queueCountLoading ? (
           <div className="mb-6 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs text-slate-400 text-center">
             ✅ Bạn đã ôn hết hôm nay! Quay lại sau.
           </div>
-        )}
+        ) : null}
 
         {/* Study mode selector */}
         <div className="mb-10">
