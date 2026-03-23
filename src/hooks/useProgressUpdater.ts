@@ -112,8 +112,10 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
 
         // 3b. Update writer_score when mode is 'write'
         if (mode === 'write') {
+          const prevWriterScore = existing?.writer_score ?? 0;
+          const isFirstWrite = prevWriterScore === 0 && !existing?.writer_next_review_at;
           const writerUpdate = computeWriterScoreUpdate(
-            existing?.writer_score ?? null,
+            prevWriterScore,
             isCorrect,
             now,
           );
@@ -127,6 +129,20 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
             },
             { onConflict: 'user_id,card_id' },
           );
+          // Log write_new once per card per day (first-time write only)
+          if (isFirstWrite) {
+            const today = todayVN();
+            await supabase.from('daily_log').upsert(
+              {
+                user_id:    user.id,
+                card_id:    cardId,
+                set_id:     setId,
+                event_type: 'write_new',
+                logged_at:  today,
+              },
+              { onConflict: 'user_id,card_id,logged_at,event_type', ignoreDuplicates: true },
+            );
+          }
         }
 
         // 4. Write daily_log events

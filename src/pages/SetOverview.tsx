@@ -80,7 +80,7 @@ export const SetOverview: React.FC = () => {
     counts: queueCounts,
     loading: queueCountLoading,
   } = useLearningQueue(setId, dailyNewLimit);
-  const { writeCount, loading: writeCountLoading } = useWriteQueue(setId);
+  const { writeCount, loading: writeCountLoading } = useWriteQueue(setId, dailyNewLimit);
   const [loading, setLoading] = useState(true);
   const [matchBest, setMatchBest] = useState<number | null>(null);
   const [showAllCards, setShowAllCards] = useState(false);
