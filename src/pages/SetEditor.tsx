@@ -6,6 +6,7 @@ import {
   Image as ImageIcon,
   Save,
   ArrowLeft,
+  Home,
   LayoutGrid,
   Upload,
   X,
@@ -50,6 +51,7 @@ export const SetEditor: React.FC = () => {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [dailyNewLimit, setDailyNewLimit] = useState(10);
   const [rows, setRows] = useState<CardRow[]>([
     { id: 'new-1', term: '', definition: '' },
     { id: 'new-2', term: '', definition: '' },
@@ -80,6 +82,7 @@ export const SetEditor: React.FC = () => {
       }
       setTitle(set.title);
       setDescription(set.description ?? '');
+      setDailyNewLimit(set.daily_new_limit ?? 10);
       if (set.flashcards && set.flashcards.length > 0) {
         setRows(
           set.flashcards.map(c => ({
@@ -223,10 +226,10 @@ export const SetEditor: React.FC = () => {
     }));
     let success = false;
     if (editSetId) {
-      const result = await updateStudySet(editSetId, title.trim(), description.trim(), cardInputs, deletedCardIds);
+      const result = await updateStudySet(editSetId, title.trim(), description.trim(), cardInputs, deletedCardIds, dailyNewLimit);
       success = result !== null || isMockMode;
     } else {
-      const result = await createStudySet(title.trim(), description.trim(), cardInputs, user?.id ?? '', null);
+      const result = await createStudySet(title.trim(), description.trim(), cardInputs, user?.id ?? '', null, dailyNewLimit);
       success = result !== null;
     }
     if (success) {
@@ -266,6 +269,9 @@ export const SetEditor: React.FC = () => {
           <div className="flex items-center gap-4">
             <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
               <ArrowLeft className="w-5 h-5 text-slate-600" />
+            </button>
+            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-slate-100 rounded-full transition-colors" title="Trang chủ">
+              <Home className="w-5 h-5 text-slate-600" />
             </button>
             <div className={cn("transition-opacity", isSticky ? "opacity-100" : "opacity-0 pointer-events-none")}>
               <h2 className="font-bold text-slate-800">{title || 'Untitled Set'}</h2>
@@ -307,12 +313,26 @@ export const SetEditor: React.FC = () => {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Description (Optional)</label>
-              <textarea 
+              <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Add a description..."
                 className="w-full border-b-2 border-slate-100 focus:border-primary outline-none py-2 transition-colors resize-none h-12 placeholder:text-slate-200"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Số từ mới mỗi ngày</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={dailyNewLimit}
+                  onChange={(e) => setDailyNewLimit(Math.max(1, Math.min(100, Number(e.target.value))))}
+                  className="w-24 border-b-2 border-slate-100 focus:border-primary outline-none py-2 transition-colors text-lg font-bold text-slate-800"
+                />
+                <span className="text-sm text-slate-400">từ / ngày</span>
+              </div>
             </div>
           </div>
         </div>

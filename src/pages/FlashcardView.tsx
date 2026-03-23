@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Home,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -22,6 +23,7 @@ import { MasteryDots } from '../components/progress/MasteryDots';
 import { useStudySets } from '../hooks/useStudySets';
 import { useUpdateLastAccessed } from '../hooks/useUpdateLastAccessed';
 import { useProgressUpdater } from '../hooks/useProgressUpdater';
+import { useLearningQueue } from '../hooks/useLearningQueue';
 import { useToast, ToastContainer } from '../components/common/Toast';
 import { supabase, isMockMode } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -35,7 +37,7 @@ export const FlashcardView: React.FC = () => {
   const { user } = useAuth();
   const { getStudySet } = useStudySets();
   useUpdateLastAccessed(setId);
-  const { submitAnswer, markAsSeen, isUpdating } = useProgressUpdater();
+  const { submitAnswer, isUpdating } = useProgressUpdater();
   const { toasts, addToast, dismiss } = useToast();
 
   const [setTitle, setSetTitle] = useState('');
@@ -50,12 +52,13 @@ export const FlashcardView: React.FC = () => {
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [modeSwitcherOpen, setModeSwitcherOpen] = useState(false);
   const modeSwitcherRef = useRef<HTMLDivElement>(null);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  const { sessionTotal } = useLearningQueue(setId);
 
   // Mastery state per card
   const [cardMastery, setCardMastery] = useState<Record<string, number>>({});
   const [cardLeech, setCardLeech] = useState<Record<string, boolean>>({});
-  // true once the initial progress DB query has returned — prevents markAsSeen firing before we know which cards already have rows
-  const [masteryLoaded, setMasteryLoaded] = useState(false);
   // flash feedback: 'correct' | 'wrong' | null
   const [flashFeedback, setFlashFeedback] = useState<'correct' | 'wrong' | null>(null);
   const [penaltyAnimate, setPenaltyAnimate] = useState(false);
@@ -64,18 +67,8 @@ export const FlashcardView: React.FC = () => {
     ? cards.filter(c => starredIds.has(c.id))
     : cards;
 
-  // When user flips a card for the first time (no prior progress row), mark it as seen.
-  // Guard: wait for masteryLoaded so we don't fire for cards that already have rows.
-  useEffect(() => {
-    if (!isFlipped || !setId || !masteryLoaded) return;
-    const card = activeCards[currentIndex];
-    if (!card) return;
-    if (cardMastery[card.id] !== undefined) return; // already has a progress row
-    markAsSeen(card.id, setId).then(() => {
-      setCardMastery(prev => ({ ...prev, [card.id]: 1 }));
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isFlipped, masteryLoaded]);
+  // Flashcard view does not mark cards as seen/learned —
+  // progress rows are only created when the user answers in Learn or Write mode.
 
   // Load initial mastery levels from DB
   useEffect(() => {
@@ -95,14 +88,8 @@ export const FlashcardView: React.FC = () => {
         });
         setCardMastery(m);
         setCardLeech(l);
-        setMasteryLoaded(true);
       });
   }, [setId, user?.id]);
-
-  // For mock mode: mastery is always empty but we still need to allow markAsSeen to fire
-  useEffect(() => {
-    if (isMockMode) setMasteryLoaded(true);
-  }, []);
 
   useEffect(() => {
     if (!setId) return;
@@ -131,7 +118,7 @@ export const FlashcardView: React.FC = () => {
           origin: { y: 0.6 },
           colors: ['#2563eb', '#10b981', '#f59e0b']
         });
-        setCurrentIndex(0);
+        setIsCompleted(true);
       }
     }, 150);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,12 +246,65 @@ export const FlashcardView: React.FC = () => {
     );
   }
 
+  if (isCompleted) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center gap-8 px-6">
+        <div className="text-center">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-1">Xem xong rồi!</h2>
+          <p className="text-slate-500 text-sm">Bạn đã xem hết {activeCards.length} thẻ</p>
+        </div>
+
+        {sessionTotal > 0 ? (
+          <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+            <p className="text-sm font-semibold text-slate-500">Tiếp tục luyện tập nào?</p>
+            <button
+              onClick={() => navigate(`/learn/${setId}`)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-violet-600 text-white font-bold rounded-xl hover:bg-violet-700 transition-colors"
+            >
+              <ClipboardList className="w-5 h-5" />
+              Learn
+            </button>
+            <button
+              onClick={() => navigate(`/write/${setId}`)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition-colors"
+            >
+              <PenLine className="w-5 h-5" />
+              Write
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+            <p className="text-sm font-semibold text-slate-500">Hôm nay đã học xong hết rồi!</p>
+            <button
+              onClick={() => navigate(`/sets/${setId}`)}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-xl hover:bg-primary-dark transition-colors"
+            >
+              <BookOpen className="w-5 h-5" />
+              Về trang bộ thẻ
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={() => { setIsCompleted(false); setCurrentIndex(0); setIsFlipped(false); }}
+          className="text-sm text-slate-400 hover:text-slate-600 transition-colors"
+        >
+          Xem lại từ đầu
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
+          </button>
+          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-slate-100 rounded-full transition-colors" title="Trang chủ">
+            <Home className="w-5 h-5 text-slate-600" />
           </button>
           <div>
             <h2 className="font-bold text-slate-800">{setTitle}</h2>

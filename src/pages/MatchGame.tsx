@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Home,
   Timer,
   Trophy,
   RotateCcw,
@@ -225,6 +226,9 @@ export const MatchGame: React.FC = () => {
         <div className="flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5" />
+          </button>
+          <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-white/10 rounded-full transition-colors" title="Trang chủ">
+            <Home className="w-5 h-5" />
           </button>
           <div>
             <h2 className="font-bold">{studySet.title}</h2>

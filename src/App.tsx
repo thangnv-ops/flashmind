@@ -9,7 +9,6 @@ import { FlashcardView } from './pages/FlashcardView';
 import { MatchGame } from './pages/MatchGame';
 import { LearnMode } from './pages/LearnMode';
 import { WriteMode } from './pages/WriteMode';
-import { MockTest } from './pages/MockTest';
 import { SetOverview } from './pages/SetOverview';
 import { AuthPage } from './pages/AuthPage';
 
@@ -63,7 +62,6 @@ export default function App() {
           <Route path="/flashcards/:setId" element={<FlashcardView />} />
           <Route path="/learn/:setId" element={<LearnMode />} />
           <Route path="/write/:setId" element={<WriteMode />} />
-          <Route path="/test/:setId" element={<MockTest />} />
           <Route path="/match/:setId" element={<MatchGame />} />
         </Route>
 

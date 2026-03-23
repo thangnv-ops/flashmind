@@ -101,6 +101,7 @@ export function useStudySets() {
       cards: CardInput[],
       userId: string,
       folderId?: string | null,
+      dailyNewLimit = 10,
     ): Promise<StudySet | null> => {
       if (isMockMode) {
         const mock: StudySet = {
@@ -108,6 +109,7 @@ export function useStudySets() {
           user_id: userId,
           title,
           description,
+          daily_new_limit: dailyNewLimit,
           folder_id: folderId ?? null,
           last_accessed: new Date().toISOString(),
           created_at: new Date().toISOString(),
@@ -133,6 +135,7 @@ export function useStudySets() {
             user_id: userId,
             title,
             description: description || null,
+            daily_new_limit: dailyNewLimit,
             folder_id: folderId ?? null,
             last_accessed: new Date().toISOString(),
           })
@@ -175,6 +178,7 @@ export function useStudySets() {
       description: string,
       cards: CardInput[],
       deletedCardIds: string[],
+      dailyNewLimit = 10,
     ): Promise<StudySet | null> => {
       if (isMockMode) {
         return null;
@@ -188,6 +192,7 @@ export function useStudySets() {
           .update({
             title,
             description: description || null,
+            daily_new_limit: dailyNewLimit,
             last_accessed: new Date().toISOString(),
           })
           .eq('id', setId)

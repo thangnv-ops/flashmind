@@ -182,3 +182,35 @@ export function computeProgressUpdate(
     };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Writer Score (Write mode only — independent of mastery system)
+// ---------------------------------------------------------------------------
+
+/**
+ * Khoảng cách nhắc lại dựa trên writer_score:
+ *  score >= 5 → 6 tháng
+ *  score >= 3 → 3 tháng
+ *  score >= 2 → 1 tháng
+ *  score <  2 → ngay bây giờ (0 ms)
+ */
+export function computeWriterScoreUpdate(
+  currentScore: number | null,
+  isCorrect: boolean,
+  now: Date = new Date(),
+): { writer_score: number; writer_next_review_at: string } {
+  const score = currentScore ?? 0;
+  const newScore = isCorrect
+    ? score + 2
+    : Math.max(0, score - 1);
+
+  let intervalMs = 0;
+  if      (newScore >= 5) intervalMs = 180 * DAY_MS;
+  else if (newScore >= 3) intervalMs = 90  * DAY_MS;
+  else if (newScore >= 2) intervalMs = 30  * DAY_MS;
+
+  return {
+    writer_score:           newScore,
+    writer_next_review_at:  new Date(now.getTime() + intervalMs).toISOString(),
+  };
+}

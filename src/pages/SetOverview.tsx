@@ -6,7 +6,6 @@ import {
   BookOpen,
   Brain,
   PenLine,
-  ClipboardList,
   Zap,
   ChevronDown,
   ChevronUp,
@@ -25,6 +24,7 @@ import { VocabStatusPanel } from '../components/progress/VocabStatusPanel';
 import { DailyProgressChart } from '../components/progress/DailyProgressChart';
 import { MasteryBadge } from '../components/progress/MasteryBadge';
 import { useLearningQueue } from '../hooks/useLearningQueue';
+import { useWriteQueue } from '../hooks/useWriteQueue';
 import type { StudySet } from '../types';
 
 const MODES = [
@@ -53,14 +53,6 @@ const MODES = [
     path: (id: string) => `/write/${id}`,
   },
   {
-    key: 'test',
-    label: 'Test',
-    desc: 'Mixed quiz',
-    icon: ClipboardList,
-    color: 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100',
-    path: (id: string) => `/test/${id}`,
-  },
-  {
     key: 'match',
     label: 'Match',
     desc: 'Beat the clock!',
@@ -80,13 +72,15 @@ export const SetOverview: React.FC = () => {
   const { user } = useAuth();
   const { dueCards, totalDue } = useReviewQueue(setId);
   const { groups: vocabGroups, loading: vocabLoading } = useVocabStatus(setId);
+  const [set, setSet] = useState<StudySet | null>(null);
+  const [dailyNewLimit, setDailyNewLimit] = useState(10);
+
   const {
-    sessionTotal: queueTotal,
+    sessionTotal: learnTotal,
     counts: queueCounts,
     loading: queueCountLoading,
-  } = useLearningQueue(setId);
-
-  const [set, setSet] = useState<StudySet | null>(null);
+  } = useLearningQueue(setId, dailyNewLimit);
+  const { writeCount, loading: writeCountLoading } = useWriteQueue(setId);
   const [loading, setLoading] = useState(true);
   const [matchBest, setMatchBest] = useState<number | null>(null);
   const [showAllCards, setShowAllCards] = useState(false);
@@ -101,6 +95,7 @@ export const SetOverview: React.FC = () => {
       getPersonalBest(setId),
     ]).then(([s, best]) => {
       setSet(s);
+      if (s) setDailyNewLimit(s.daily_new_limit ?? 10);
       setMatchBest(best);
       setLoading(false);
     });
@@ -241,41 +236,28 @@ export const SetOverview: React.FC = () => {
           </div>
         )}
 
-        {/* Ôn tập hôm nay — hiển thị khi queue có bài */}
-        {!queueCountLoading && queueTotal > 0 ? (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">📬</span>
-              <div>
-                <p className="font-bold text-blue-700 text-sm">Ôn tập hôm nay</p>
-                <p className="text-blue-500 text-xs flex flex-wrap gap-x-2">
-                  <span>{queueTotal} thẻ cần học</span>
-                  {queueCounts.urgent > 0 && <span className="text-red-500">🔴 {queueCounts.urgent} cấp cứu</span>}
-                  {queueCounts.review > 0 && <span className="text-blue-400">🔵 {queueCounts.review} ôn tập</span>}
-                  {queueCounts.new > 0 && <span className="text-green-500">🟢 {queueCounts.new} từ mới</span>}
-                </p>
+        {/* Queue bucket counts */}
+        {!queueCountLoading && (
+          <div className="mb-8">
+            <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Hôm nay cần học</h2>
+            <div className="flex gap-3">
+              <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-white border rounded-xl">
+                <span className="text-2xl font-bold text-slate-800">{queueCounts.urgent + queueCounts.review}</span>
+                <span className="text-sm text-slate-500 leading-tight">từ cần<br />ôn tập</span>
               </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => navigate(`/learn/${setId}`)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-700 transition-colors"
-              >
-                🧠 Learn
-              </button>
-              <button
-                onClick={() => navigate(`/write/${setId}`)}
-                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition-colors"
-              >
-                ✍️ Write
-              </button>
+              <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-white border rounded-xl">
+                <span className="text-2xl font-bold text-slate-800">{queueCounts.new}</span>
+                <span className="text-sm text-slate-500 leading-tight">từ<br />mới</span>
+              </div>
+              {!writeCountLoading && (
+                <div className="flex-1 flex items-center gap-3 px-4 py-3 bg-white border rounded-xl">
+                  <span className="text-2xl font-bold text-slate-800">{writeCount}</span>
+                  <span className="text-sm text-slate-500 leading-tight">từ cần<br />viết</span>
+                </div>
+              )}
             </div>
           </div>
-        ) : !queueCountLoading ? (
-          <div className="mb-6 bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-xs text-slate-400 text-center">
-            ✅ Bạn đã ôn hết hôm nay! Quay lại sau.
-          </div>
-        ) : null}
+        )}
 
         {/* Study mode selector */}
         <div className="mb-10">
@@ -283,16 +265,18 @@ export const SetOverview: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {MODES.map(mode => {
               const Icon = mode.icon;
-              const showBadge = !queueCountLoading && queueTotal > 0 && (mode.key === 'learn' || mode.key === 'write');
+              const learnBadge = !queueCountLoading && learnTotal > 0 && mode.key === 'learn';
+              const writeBadge = mode.key === 'write' && (!queueCountLoading || !writeCountLoading) && (learnTotal + writeCount) > 0;
+              const badgeCount = mode.key === 'write' ? learnTotal + writeCount : learnTotal;
               return (
                 <button
                   key={mode.key}
                   onClick={() => navigate(mode.path(set.id))}
                   className={`relative flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${mode.color}`}
                 >
-                  {showBadge && (
+                  {(learnBadge || writeBadge) && (
                     <span className="absolute -top-2 -right-2 min-w-[22px] h-[22px] px-1.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[11px] font-bold shadow">
-                      {queueTotal}
+                      {badgeCount}
                     </span>
                   )}
                   <div className="shrink-0 mt-0.5">

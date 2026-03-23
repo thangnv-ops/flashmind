@@ -22,9 +22,10 @@ CREATE TABLE study_sets (
   user_id       UUID        REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   folder_id     UUID        REFERENCES folders(id) ON DELETE SET NULL,
   title         TEXT        NOT NULL,
-  description   TEXT,
-  last_accessed TIMESTAMPTZ DEFAULT NOW(),
-  created_at    TIMESTAMPTZ DEFAULT NOW()
+  description     TEXT,
+  daily_new_limit INT         NOT NULL DEFAULT 10,
+  last_accessed   TIMESTAMPTZ DEFAULT NOW(),
+  created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE flashcards (
@@ -107,3 +108,17 @@ CREATE INDEX idx_flashcards_set_id     ON flashcards(set_id);
 CREATE INDEX idx_flashcards_position   ON flashcards(set_id, position);
 CREATE INDEX idx_progress_user_card    ON progress(user_id, card_id);
 CREATE INDEX idx_match_records_user    ON match_records(user_id, set_id);
+
+-- ------------------------------------------------------------
+-- PATCHES (run on existing databases)
+-- ------------------------------------------------------------
+
+-- Phase 7: add daily new-card limit per set
+ALTER TABLE study_sets
+  ADD COLUMN IF NOT EXISTS daily_new_limit INT NOT NULL DEFAULT 10;
+
+-- Phase 7: add writer score fields to progress
+ALTER TABLE progress
+  ADD COLUMN IF NOT EXISTS writer_score          INT     NOT NULL DEFAULT 0;
+ALTER TABLE progress
+  ADD COLUMN IF NOT EXISTS writer_next_review_at TIMESTAMPTZ;

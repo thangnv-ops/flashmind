@@ -29,6 +29,7 @@ export interface StudySet {
   folder_id?: string | null;
   title: string;
   description?: string | null;
+  daily_new_limit: number;  // max new cards per day, default 10
   last_accessed: string; // ISO timestamp
   created_at: string;    // ISO timestamp
   flashcards?: Flashcard[];

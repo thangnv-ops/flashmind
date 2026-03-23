@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { todayVN } from '../utils/time';
 import {
   computeProgressUpdate,
+  computeWriterScoreUpdate,
   getMasteryBadge,
   type ProgressSnapshot,
 } from '../lib/masteryEngine';
@@ -68,7 +69,7 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
         const { data: existing } = await supabase
           .from('progress')
           .select(
-            'mastery_level, consecutive_correct, ease_factor, penalty_count, is_leech, leech_detected_at',
+            'mastery_level, consecutive_correct, ease_factor, penalty_count, is_leech, leech_detected_at, writer_score, writer_next_review_at',
           )
           .eq('user_id', user.id)
           .eq('card_id', cardId)
@@ -108,6 +109,25 @@ export function useProgressUpdater(): UseProgressUpdaterReturn {
           },
           { onConflict: 'user_id,card_id' },
         );
+
+        // 3b. Update writer_score when mode is 'write'
+        if (mode === 'write') {
+          const writerUpdate = computeWriterScoreUpdate(
+            existing?.writer_score ?? null,
+            isCorrect,
+            now,
+          );
+          await supabase.from('progress').upsert(
+            {
+              user_id:                user.id,
+              card_id:                cardId,
+              set_id:                 setId,
+              writer_score:           writerUpdate.writer_score,
+              writer_next_review_at:  writerUpdate.writer_next_review_at,
+            },
+            { onConflict: 'user_id,card_id' },
+          );
+        }
 
         // 4. Write daily_log events
         //    'learned'   = card seen for the first time (no prior progress row)

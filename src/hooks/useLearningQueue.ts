@@ -5,13 +5,7 @@ import { todayVN } from '../utils/time';
 import type { Flashcard } from '../types';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-export const SESSION_SIZE = 10;
-const URGENT_SLOTS = 4;  // Bucket A: max 4 slots
-const REVIEW_SLOTS = 4;  // Bucket B: max 4 slots
-// Bucket C fills ALL remaining slots (SESSION_SIZE - actual A - actual B),
-// capped by the daily new-card limit. When there are 0 urgent + 0 review
-// cards (e.g. brand-new set), all 10 slots are filled with new cards.
-export const DEFAULT_DAILY_NEW_LIMIT = 20;
+export const DEFAULT_DAILY_NEW_LIMIT = 10;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 /**
@@ -45,7 +39,9 @@ export interface UseLearningQueueReturn {
   counts: QueueCounts;
   /** IDs of cards answered correctly at least once this session. */
   correctCardIds: Set<string>;
-  /** How many unique cards were in the original 10-card session. */
+  /** Overdue cards only (urgent + review), excludes new cards. Used for "Ôn tập hôm nay" display. */
+  reviewTotal: number;
+  /** Total cards in the session: overdue + new. Used for Learn/Write button counts. */
   sessionTotal: number;
   /**
    * True once every card in the original session has been answered correctly
@@ -107,18 +103,19 @@ export function useLearningQueue(
       const now   = new Date().toISOString();
       const today = todayVN();
 
-      // ── How many NEW cards has the user already studied today? ──────────
+      // ── How many NEW cards has the user already studied today (this set)? ─
       const { count: newTodayCount } = await supabase
         .from('daily_log')
         .select('*', { count: 'exact', head: true })
         .eq('user_id',    user.id)
+        .eq('set_id',     setId)
         .eq('event_type', 'learned')
         .eq('logged_at',  today);
 
       const newCount     = newTodayCount ?? 0;
       const newSlotsLeft = Math.max(0, dailyNewLimit - newCount);
 
-      // ── Bucket A: mastery 1-2 AND overdue ───────────────────────────────
+      // ── Bucket A: mastery 1-2 AND overdue (fetch ALL) ───────────────────
       const { data: urgentRows } = await supabase
         .from('progress')
         .select(`
@@ -131,10 +128,9 @@ export function useLearningQueue(
         .lt('mastery_level',   3)
         .lte('next_review_at', now)
         .order('mastery_level',   { ascending: true })
-        .order('next_review_at',  { ascending: true })
-        .limit(URGENT_SLOTS);
+        .order('next_review_at',  { ascending: true });
 
-      // ── Bucket B: mastery ≥ 3 AND overdue ────────────────────────────────
+      // ── Bucket B: mastery ≥ 3 AND overdue (fetch ALL) ───────────────────
       const { data: reviewRows } = await supabase
         .from('progress')
         .select(`
@@ -146,14 +142,10 @@ export function useLearningQueue(
         .eq('set_id',  setId)
         .gte('mastery_level',  3)
         .lte('next_review_at', now)
-        .order('next_review_at', { ascending: true })
-        .limit(REVIEW_SLOTS);
+        .order('next_review_at', { ascending: true });
 
-      // ── Bucket C: new cards fill ALL remaining slots ──────────────────────
-      // remaining = SESSION_SIZE - actual A - actual B, capped by daily limit
-      const urgentFetched = (urgentRows ?? []).length;
-      const reviewFetched = (reviewRows ?? []).length;
-      const newLimit      = Math.min(SESSION_SIZE - urgentFetched - reviewFetched, newSlotsLeft);
+      // ── Bucket C: new cards fill remaining daily slots ───────────────────
+      const newLimit = newSlotsLeft;
 
       let finalNew: QueuedCard[] = [];
       if (newLimit > 0) {
@@ -202,18 +194,8 @@ export function useLearningQueue(
         mastery_level: row.mastery_level,
       });
 
-      let urgentCards: QueuedCard[] = (urgentRows ?? []).map(r => mapProgress(r, 'urgent'));
-      let reviewCards: QueuedCard[] = (reviewRows ?? []).map(r => mapProgress(r, 'review'));
-
-      // ── Fallback: urgent underflow → relabel review cards as urgent ──────
-      const urgentUnderflow = URGENT_SLOTS - urgentCards.length;
-      if (urgentUnderflow > 0 && reviewCards.length > 0) {
-        const promoted = reviewCards
-          .slice(0, urgentUnderflow)
-          .map(c => ({ ...c, bucket: 'urgent' as CardBucket }));
-        urgentCards = [...urgentCards, ...promoted];
-        reviewCards = reviewCards.slice(urgentUnderflow);
-      }
+      const urgentCards: QueuedCard[] = (urgentRows ?? []).map(r => mapProgress(r, 'urgent'));
+      const reviewCards: QueuedCard[] = (reviewRows ?? []).map(r => mapProgress(r, 'review'));
 
       const combined = [...urgentCards, ...reviewCards, ...finalNew];
       const ids       = new Set(combined.map(c => c.id));
@@ -265,6 +247,7 @@ export function useLearningQueue(
     currentCard: queue[0] ?? null,
     counts,
     correctCardIds,
+    reviewTotal: counts.urgent + counts.review,
     sessionTotal: originalCardIds.size,
     isComplete,
     loading,

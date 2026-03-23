@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Home,
   CheckCircle2,
   XCircle,
   AlertCircle,
@@ -34,6 +35,8 @@ export const WriteMode: React.FC = () => {
   const { submitAnswer } = useProgressUpdater();
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const [dailyLimitSetting, setDailyLimitSetting] = useState(10);
+
   const {
     queue,
     counts,
@@ -44,7 +47,7 @@ export const WriteMode: React.FC = () => {
     refetch: refetchQueue,
     newCardsToday,
     dailyNewLimit,
-  } = useLearningQueue(setId);
+  } = useLearningQueue(setId, dailyLimitSetting);
 
   const [setTitle, setSetTitle] = useState('');
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -61,6 +64,8 @@ export const WriteMode: React.FC = () => {
   const autoNextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Tracks unique card IDs answered correctly — session ends when size >= sessionTotal
   const uniqueCorrectRef = useRef<Set<string>>(new Set());
+  // Tracks pending submitAnswer promises so we can await them before navigating away
+  const pendingSubmitsRef = useRef<Promise<unknown>[]>([]);
 
   // Clear auto-next timer on unmount
   useEffect(() => {
@@ -73,7 +78,10 @@ export const WriteMode: React.FC = () => {
     if (!setId) return;
     setLoadingSet(true);
     getStudySet(setId).then(set => {
-      if (set) setSetTitle(set.title);
+      if (set) {
+        setSetTitle(set.title);
+        setDailyLimitSetting(set.daily_new_limit ?? 10);
+      }
       setLoadingSet(false);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -141,9 +149,11 @@ export const WriteMode: React.FC = () => {
     if (isCorrect) {
       setResults(prev => [...prev, true]);
       recordResult(currentCard.id, true);
-      submitAnswer(currentCard.id, true, 'write', setId!).then(r => {
-        if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
-      });
+      pendingSubmitsRef.current.push(
+        submitAnswer(currentCard.id, true, 'write', setId!).then(r => {
+          if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
+        })
+      );
       // Auto-advance after showing correct feedback
       autoNextTimerRef.current = setTimeout(() => advanceCard(true), 1000);
     } else {
@@ -151,9 +161,11 @@ export const WriteMode: React.FC = () => {
       if (!(wrongPerCard[currentCard.id] ?? 0)) {
         setResults(prev => [...prev, false]);
         recordResult(currentCard.id, false);
-        submitAnswer(currentCard.id, false, 'write', setId!).then(r => {
-          if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
-        });
+        pendingSubmitsRef.current.push(
+          submitAnswer(currentCard.id, false, 'write', setId!).then(r => {
+            if (r) setMasteryUpdates(prev => ({ ...prev, [currentCard.id]: r.newMasteryLevel }));
+          })
+        );
       }
       // Increment per-card wrong count
       const prevWrong = wrongPerCard[currentCard.id] ?? 0;
@@ -288,7 +300,7 @@ export const WriteMode: React.FC = () => {
               Study Again
             </button>
             <button
-              onClick={() => navigate(`/flashcards/${setId}`)}
+              onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate(`/sets/${setId}`); }}
               className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
             >
               Back to Set
@@ -326,8 +338,11 @@ export const WriteMode: React.FC = () => {
 
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <button onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate(-1); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
+          </button>
+          <button onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate('/dashboard'); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors" title="Trang chủ">
+            <Home className="w-5 h-5 text-slate-600" />
           </button>
           <div>
             <h2 className="font-bold text-slate-800">{setTitle}</h2>

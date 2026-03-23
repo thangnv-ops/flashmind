@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Home,
   CheckCircle2,
   XCircle,
   RotateCcw,
@@ -32,6 +33,8 @@ export const LearnMode: React.FC = () => {
   const { recordResult, pauseSession, finishSession, resultsCount, isSaving } = useStudySession(setId, 'learn');
   const { submitAnswer } = useProgressUpdater();
 
+  const [dailyLimitSetting, setDailyLimitSetting] = useState(10);
+
   const {
     queue,
     counts,
@@ -43,10 +46,12 @@ export const LearnMode: React.FC = () => {
     refetch: refetchQueue,
     newCardsToday,
     dailyNewLimit,
-  } = useLearningQueue(setId);
+  } = useLearningQueue(setId, dailyLimitSetting);
 
   // Tracks unique card IDs answered correctly this session (ref for sync checks in closure)
   const uniqueCorrectRef = useRef<Set<string>>(new Set());
+  // Tracks pending submitAnswer promises so we can await them before navigating away
+  const pendingSubmitsRef = useRef<Promise<unknown>[]>([]);
 
   const [setTitle, setSetTitle] = useState('');
   const [allCards, setAllCards] = useState<Flashcard[]>([]);
@@ -70,6 +75,7 @@ export const LearnMode: React.FC = () => {
       if (set) {
         setSetTitle(set.title);
         setAllCards(set.flashcards ?? []);
+        setDailyLimitSetting(set.daily_new_limit ?? 10);
       }
       setLoadingSet(false);
     });
@@ -100,9 +106,10 @@ export const LearnMode: React.FC = () => {
 
     // Update mastery via engine (fire-and-forget, non-blocking)
     if (setId) {
-      submitAnswer(current.cardId, isCorrect, 'learn', setId).then(result => {
+      const p = submitAnswer(current.cardId, isCorrect, 'learn', setId).then(result => {
         setMasteryUpdates(prev => ({ ...prev, [current.cardId]: result.newMasteryLevel }));
       }).catch(() => {/* ignore DB errors */});
+      pendingSubmitsRef.current.push(p);
     }
 
     if (isCorrect) {
@@ -268,7 +275,7 @@ export const LearnMode: React.FC = () => {
               </button>
             )}
             <button
-              onClick={() => navigate(`/flashcards/${setId}`)}
+              onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate(`/sets/${setId}`); }}
               className="w-full py-3 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-colors"
             >
               Back to Set
@@ -309,8 +316,11 @@ export const LearnMode: React.FC = () => {
 
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+          <button onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate(-1); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
             <ArrowLeft className="w-5 h-5 text-slate-600" />
+          </button>
+          <button onClick={async () => { await Promise.allSettled(pendingSubmitsRef.current); navigate('/dashboard'); }} className="p-2 hover:bg-slate-100 rounded-full transition-colors" title="Trang chủ">
+            <Home className="w-5 h-5 text-slate-600" />
           </button>
           <div>
             <h2 className="font-bold text-slate-800">{setTitle}</h2>
