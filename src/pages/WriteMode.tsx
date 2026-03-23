@@ -47,7 +47,7 @@ export const WriteMode: React.FC = () => {
     refetch: refetchQueue,
     newCardsToday,
     dailyNewLimit,
-  } = useLearningQueue(setId, dailyLimitSetting);
+  } = useLearningQueue(setId, dailyLimitSetting, true);
 
   const [setTitle, setSetTitle] = useState('');
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -255,10 +255,10 @@ export const WriteMode: React.FC = () => {
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Bạn đã hoàn thành bài học hôm nay!</h2>
           <p className="text-slate-500 mb-1">
-            Đã học <span className="font-bold text-primary">{newCardsToday}</span> từ mới hôm nay
+            Đã viết <span className="font-bold text-primary">{newCardsToday}</span> từ mới hôm nay
             {newCardsToday >= dailyNewLimit && ` — đã đạt giới hạn ${dailyNewLimit} từ/ngày`}.
           </p>
-          <p className="text-slate-400 text-sm mb-8">Không có từ nào cần ôn tập lúc này. Quỹ tiết kiệm trí não đang được bảo vệ → hãy thử lại vào buổi tối hoặc ngày mai!</p>
+          <p className="text-slate-400 text-sm mb-8">Không còn từ mới hay từ chưa viết nào hôm nay. Hãy thử lại vào buổi tối hoặc ngày mai!</p>
           <div className="flex flex-col gap-3">
             <button
               onClick={() => navigate(`/flashcards/${setId}`)}

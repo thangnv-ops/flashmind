@@ -72,6 +72,7 @@ export interface UseLearningQueueReturn {
 export function useLearningQueue(
   setId: string | undefined,
   dailyNewLimit = DEFAULT_DAILY_NEW_LIMIT,
+  writeMode = false,
 ): UseLearningQueueReturn {
   const { user } = useAuth();
 
@@ -104,12 +105,14 @@ export function useLearningQueue(
       const today = todayVN();
 
       // ── How many NEW cards has the user already studied today (this set)? ─
+      // WriteMode tracks 'write_new' events; LearnMode tracks 'learned' events.
+      const newEventType = writeMode ? 'write_new' : 'learned';
       const { count: newTodayCount } = await supabase
         .from('daily_log')
         .select('*', { count: 'exact', head: true })
         .eq('user_id',    user.id)
         .eq('set_id',     setId)
-        .eq('event_type', 'learned')
+        .eq('event_type', newEventType)
         .eq('logged_at',  today);
 
       const newCount     = newTodayCount ?? 0;
@@ -145,39 +148,74 @@ export function useLearningQueue(
         .order('next_review_at', { ascending: true });
 
       // ── Bucket C: new cards fill remaining daily slots ───────────────────
+      // WriteMode: "new" = cards never written (writer_next_review_at IS NULL)
+      // LearnMode: "new" = cards with no progress row at all
       const newLimit = newSlotsLeft;
 
       let finalNew: QueuedCard[] = [];
       if (newLimit > 0) {
-        const { data: seenProgress } = await supabase
-          .from('progress')
-          .select('card_id')
-          .eq('user_id', user.id)
-          .eq('set_id',  setId);
+        if (writeMode) {
+          // Fetch all cards in set that have writer_next_review_at set (already written)
+          const { data: writtenProgress } = await supabase
+            .from('progress')
+            .select('card_id')
+            .eq('user_id', user.id)
+            .eq('set_id',  setId)
+            .not('writer_next_review_at', 'is', null);
 
-        const seenIds = new Set((seenProgress ?? []).map((p: any) => p.card_id as string));
+          const writtenIds = new Set((writtenProgress ?? []).map((p: any) => p.card_id as string));
 
-        const { data: allFlashcards } = await supabase
-          .from('flashcards')
-          .select('id, set_id, term, definition, image_url, is_starred, position')
-          .eq('set_id', setId)
-          .order('position', { ascending: true })
-          .limit(newLimit + seenIds.size + 20);
+          const { data: allFlashcards } = await supabase
+            .from('flashcards')
+            .select('id, set_id, term, definition, image_url, is_starred, position')
+            .eq('set_id', setId)
+            .order('position', { ascending: true });
 
-        finalNew = (allFlashcards ?? [])
-          .filter((fc: any) => !seenIds.has(fc.id as string))
-          .slice(0, newLimit)
-          .map((fc: any): QueuedCard => ({
-            id:          fc.id,
-            set_id:      fc.set_id,
-            term:        fc.term,
-            definition:  fc.definition,
-            image_url:   fc.image_url ?? null,
-            is_starred:  fc.is_starred,
-            position:    fc.position,
-            bucket:      'new',
-            mastery_level: 0,
-          }));
+          finalNew = (allFlashcards ?? [])
+            .filter((fc: any) => !writtenIds.has(fc.id as string))
+            .slice(0, newLimit)
+            .map((fc: any): QueuedCard => ({
+              id:          fc.id,
+              set_id:      fc.set_id,
+              term:        fc.term,
+              definition:  fc.definition,
+              image_url:   fc.image_url ?? null,
+              is_starred:  fc.is_starred,
+              position:    fc.position,
+              bucket:      'new',
+              mastery_level: 0,
+            }));
+        } else {
+          const { data: seenProgress } = await supabase
+            .from('progress')
+            .select('card_id')
+            .eq('user_id', user.id)
+            .eq('set_id',  setId);
+
+          const seenIds = new Set((seenProgress ?? []).map((p: any) => p.card_id as string));
+
+          const { data: allFlashcards } = await supabase
+            .from('flashcards')
+            .select('id, set_id, term, definition, image_url, is_starred, position')
+            .eq('set_id', setId)
+            .order('position', { ascending: true })
+            .limit(newLimit + seenIds.size + 20);
+
+          finalNew = (allFlashcards ?? [])
+            .filter((fc: any) => !seenIds.has(fc.id as string))
+            .slice(0, newLimit)
+            .map((fc: any): QueuedCard => ({
+              id:          fc.id,
+              set_id:      fc.set_id,
+              term:        fc.term,
+              definition:  fc.definition,
+              image_url:   fc.image_url ?? null,
+              is_starred:  fc.is_starred,
+              position:    fc.position,
+              bucket:      'new',
+              mastery_level: 0,
+            }));
+        }
       }
 
       if (cancelled) return;
