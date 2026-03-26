@@ -43,3 +43,29 @@ export interface Folder {
   name: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 8 — Band system (maps mastery 1–10 to 5 memory bands)
+// ---------------------------------------------------------------------------
+
+export type BandLevel = 1 | 2 | 3 | 4 | 5;
+
+export interface BandInfo {
+  band: BandLevel;
+  label: string;        // Vietnamese
+  labelEn: string;      // English
+  reviewInterval: string;
+  color: string;        // Tailwind bg class
+  textColor: string;    // Tailwind text class
+}
+
+export interface LearningTrendPoint {
+  date: string;         // 'YYYY-MM-DD'
+  newlyLearned: number; // distinct cards with event_type='learned'
+  forgotten: number;    // distinct cards with event_type='forgotten'
+}
+
+export interface StudyTimeStats {
+  totalMinutes: number;
+  byMode: Record<StudyMode, number>; // minutes per mode
+}

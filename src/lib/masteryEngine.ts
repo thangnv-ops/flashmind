@@ -194,6 +194,36 @@ export function computeProgressUpdate(
  *  score >= 2 → 1 tháng
  *  score <  2 → ngay bây giờ (0 ms)
  */
+// ---------------------------------------------------------------------------
+// Phase 8 — Band system (5 memory bands mapped from 10 mastery levels)
+// ---------------------------------------------------------------------------
+
+import type { BandLevel, BandInfo } from '../types';
+
+/**
+ * Maps mastery level (1–10) to one of 5 memory bands.
+ * Band 1 = Unfamiliar (level 1-2), Band 5 = Long-term (level 9-10).
+ */
+export function masteryToBand(masteryLevel: number): BandLevel {
+  if (masteryLevel <= 2) return 1;
+  if (masteryLevel <= 4) return 2;
+  if (masteryLevel <= 6) return 3;
+  if (masteryLevel <= 8) return 4;
+  return 5;
+}
+
+export const BAND_INFO: Record<BandLevel, BandInfo> = {
+  1: { band: 1, label: 'Chưa nhớ',  labelEn: 'Unfamiliar', reviewInterval: '1 ngày',   color: 'bg-red-500',     textColor: 'text-red-600' },
+  2: { band: 2, label: 'Mong manh', labelEn: 'Fragile',    reviewInterval: '2–3 ngày', color: 'bg-orange-400',  textColor: 'text-orange-500' },
+  3: { band: 3, label: 'Chủ động',  labelEn: 'Active',     reviewInterval: '1 tuần',   color: 'bg-yellow-400',  textColor: 'text-yellow-600' },
+  4: { band: 4, label: 'Tự tin',    labelEn: 'Confident',  reviewInterval: '2 tuần',   color: 'bg-blue-500',    textColor: 'text-blue-600' },
+  5: { band: 5, label: 'Dài hạn',   labelEn: 'Long-term',  reviewInterval: '1 tháng',  color: 'bg-emerald-500', textColor: 'text-emerald-600' },
+};
+
+export function getBandInfo(masteryLevel: number): BandInfo {
+  return BAND_INFO[masteryToBand(masteryLevel)];
+}
+
 export function computeWriterScoreUpdate(
   currentScore: number | null,
   isCorrect: boolean,

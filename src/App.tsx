@@ -11,6 +11,8 @@ import { LearnMode } from './pages/LearnMode';
 import { WriteMode } from './pages/WriteMode';
 import { SetOverview } from './pages/SetOverview';
 import { AuthPage } from './pages/AuthPage';
+import { WordScramble } from './pages/WordScramble';
+import { WordBuilder } from './pages/WordBuilder';
 
 // Banner shown when running without a real Supabase project
 function DemoBanner() {
@@ -63,6 +65,8 @@ export default function App() {
           <Route path="/learn/:setId" element={<LearnMode />} />
           <Route path="/write/:setId" element={<WriteMode />} />
           <Route path="/match/:setId" element={<MatchGame />} />
+          <Route path="/scramble/:setId" element={<WordScramble />} />
+          <Route path="/builder/:setId" element={<WordBuilder />} />
         </Route>
 
         {/* Catch-all */}

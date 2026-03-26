@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase, isMockMode } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { todayVN, daysAgoVN } from '../utils/time';
+import type { LearningTrendPoint } from '../types';
 
 export interface DayStat {
   date: string;     // "YYYY-MM-DD"
@@ -25,6 +26,22 @@ function generateMockStats(days: number): DayStat[] {
   return result;
 }
 
+function generateMockTrend(days: number): LearningTrendPoint[] {
+  const result: LearningTrendPoint[] = [];
+  const today = new Date();
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const seed = d.getDate() + d.getMonth() * 31;
+    result.push({
+      date: d.toISOString().split('T')[0],
+      newlyLearned: ((seed * 7) % 9) + (i < 5 ? 3 : 0),
+      forgotten: (seed * 3) % 4,
+    });
+  }
+  return result;
+}
+
 /**
  * Aggregates daily_log events for the past N days.
  * Optionally scoped to a specific set (setId).
@@ -32,6 +49,7 @@ function generateMockStats(days: number): DayStat[] {
 export function useDailyStats(days: 7 | 14 | 30, setId?: string) {
   const { user } = useAuth();
   const [stats, setStats] = useState<DayStat[]>([]);
+  const [learningTrend, setLearningTrend] = useState<LearningTrendPoint[]>([]);
   const [loading, setLoading] = useState(true);
   // Distinct card counts (unique words) for the selected period
   const [uniqueLearnedCards, setUniqueLearnedCards] = useState(0);
@@ -44,6 +62,7 @@ export function useDailyStats(days: 7 | 14 | 30, setId?: string) {
     if (isMockMode) {
       const mockStats = generateMockStats(days);
       setStats(mockStats);
+      setLearningTrend(generateMockTrend(days));
       setUniqueLearnedCards(mockStats.reduce((s, d) => s + d.learned, 0));
       setUniqueForgottenCards(mockStats.reduce((s, d) => s + d.forgotten, 0));
       setUniqueReviewedCards(Math.floor(mockStats.reduce((s, d) => s + d.learned, 0) * 1.5));
@@ -81,14 +100,23 @@ export function useDailyStats(days: 7 | 14 | 30, setId?: string) {
       const forgottenCardIds = new Set<string>();
       const reviewedCardIds = new Set<string>();
 
+      // For learning trend: distinct cards per day
+      const trendMap = new Map<string, { newlyLearned: Set<string>; forgotten: Set<string> }>();
+      for (let i = days - 1; i >= 0; i--) {
+        const date = daysAgoVN(i);
+        trendMap.set(date, { newlyLearned: new Set<string>(), forgotten: new Set<string>() });
+      }
+
       (data ?? []).forEach((row: any) => {
         const existing = statsMap.get(row.logged_at) ?? { learned: 0, forgotten: 0 };
         if (row.event_type === 'learned') {
           existing.learned++;
           learnedCardIds.add(row.card_id);
+          trendMap.get(row.logged_at)?.newlyLearned.add(row.card_id);
         } else if (row.event_type === 'forgotten') {
           existing.forgotten++;
           forgottenCardIds.add(row.card_id);
+          trendMap.get(row.logged_at)?.forgotten.add(row.card_id);
         } else if (row.event_type === 'reviewed') {
           reviewedCardIds.add(row.card_id);
         }
@@ -103,7 +131,15 @@ export function useDailyStats(days: 7 | 14 | 30, setId?: string) {
       statsMap.forEach((value, date) => result.push({ date, ...value }));
       result.sort((a, b) => a.date.localeCompare(b.date));
 
+      // Build learning trend from per-day distinct card sets
+      const trend: LearningTrendPoint[] = [];
+      trendMap.forEach((value, date) => {
+        trend.push({ date, newlyLearned: value.newlyLearned.size, forgotten: value.forgotten.size });
+      });
+      trend.sort((a, b) => a.date.localeCompare(b.date));
+
       setStats(result);
+      setLearningTrend(trend);
       setLoading(false);
     };
 
@@ -126,5 +162,5 @@ export function useDailyStats(days: 7 | 14 | 30, setId?: string) {
     return count;
   }, [stats]);
 
-  return { stats, totalLearned, totalForgotten, uniqueLearnedCards, uniqueForgottenCards, uniqueReviewedCards, streak, loading };
+  return { stats, learningTrend, totalLearned, totalForgotten, uniqueLearnedCards, uniqueForgottenCards, uniqueReviewedCards, streak, loading };
 }

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase, isMockMode } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { MOCK_SETS } from '../mockData';
-import type { Flashcard } from '../types';
+import { masteryToBand } from '../lib/masteryEngine';
+import type { Flashcard, BandLevel } from '../types';
 
 export interface VocabGroup {
   mastered: Flashcard[];    // mastery_level >= 8: đã thành thạo
@@ -21,6 +22,7 @@ export function useVocabStatus(setId: string | undefined) {
     inProgress: [],
     notStarted: [],
   });
+  const [bandCounts, setBandCounts] = useState<Record<BandLevel, number>>({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -32,7 +34,9 @@ export function useVocabStatus(setId: string | undefined) {
     if (isMockMode) {
       const set = MOCK_SETS.find(s => s.id === setId);
       const cards = (set?.flashcards ?? []) as Flashcard[];
+      const bandCounts: Record<BandLevel, number> = { 1: cards.length, 2: 0, 3: 0, 4: 0, 5: 0 };
       setGroups({ mastered: [], inProgress: [], notStarted: cards });
+      setBandCounts(bandCounts);
       setLoading(false);
       return;
     }
@@ -48,6 +52,7 @@ export function useVocabStatus(setId: string | undefined) {
 
     if (!cards || cards.length === 0) {
       setGroups({ mastered: [], inProgress: [], notStarted: [] });
+      setBandCounts({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
       setLoading(false);
       return;
     }
@@ -78,7 +83,19 @@ export function useVocabStatus(setId: string | undefined) {
       }
     });
 
+    // Band distribution (cards without progress row → Band 1)
+    const newBandCounts: Record<BandLevel, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    cards.forEach((card: any) => {
+      const mastery = masteryMap.get(card.id);
+      if (mastery !== undefined) {
+        newBandCounts[masteryToBand(mastery)] += 1;
+      } else {
+        newBandCounts[1] += 1;
+      }
+    });
+
     setGroups({ mastered, inProgress, notStarted });
+    setBandCounts(newBandCounts);
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setId, user?.id]);
@@ -98,5 +115,5 @@ export function useVocabStatus(setId: string | undefined) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [fetchData]);
 
-  return { groups, loading, refetch: fetchData };
+  return { groups, bandCounts, loading, refetch: fetchData };
 }

@@ -7,6 +7,8 @@ import {
   Brain,
   PenLine,
   Zap,
+  Shuffle,
+  Blocks,
   ChevronDown,
   ChevronUp,
   Loader2,
@@ -22,6 +24,8 @@ import { supabase, isMockMode } from '../lib/supabase';
 import { relativeTime } from '../utils/time';
 import { VocabStatusPanel } from '../components/progress/VocabStatusPanel';
 import { DailyProgressChart } from '../components/progress/DailyProgressChart';
+import { BandDistributionChart } from '../components/progress/BandDistributionChart';
+import { LearningTrendChart } from '../components/progress/LearningTrendChart';
 import { MasteryBadge } from '../components/progress/MasteryBadge';
 import { useLearningQueue } from '../hooks/useLearningQueue';
 import { useWriteQueue } from '../hooks/useWriteQueue';
@@ -62,6 +66,25 @@ const MODES = [
   },
 ] as const;
 
+const GAMES = [
+  {
+    key: 'scramble',
+    label: 'Giải chữ',
+    desc: 'Sắp xếp lại chữ cái',
+    icon: Shuffle,
+    color: 'bg-fuchsia-50 text-fuchsia-600 border-fuchsia-200 hover:bg-fuchsia-100',
+    path: (id: string) => `/scramble/${id}`,
+  },
+  {
+    key: 'builder',
+    label: 'Xây từ',
+    desc: 'Chọn đúng chữ cái',
+    icon: Blocks,
+    color: 'bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100',
+    path: (id: string) => `/builder/${id}`,
+  },
+] as const;
+
 const PREVIEW_LIMIT = 5;
 
 export const SetOverview: React.FC = () => {
@@ -71,7 +94,7 @@ export const SetOverview: React.FC = () => {
   const { getPersonalBest } = useMatchRecords();
   const { user } = useAuth();
   const { dueCards, totalDue } = useReviewQueue(setId);
-  const { groups: vocabGroups, loading: vocabLoading } = useVocabStatus(setId);
+  const { groups: vocabGroups, bandCounts, loading: vocabLoading } = useVocabStatus(setId);
   const [set, setSet] = useState<StudySet | null>(null);
   const [dailyNewLimit, setDailyNewLimit] = useState(10);
 
@@ -260,7 +283,7 @@ export const SetOverview: React.FC = () => {
         )}
 
         {/* Study mode selector */}
-        <div className="mb-10">
+        <div className="mb-8">
           <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Study Mode</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {MODES.map(mode => {
@@ -292,17 +315,46 @@ export const SetOverview: React.FC = () => {
           </div>
         </div>
 
-        {/* Vocabulary Status */}
-        <div className="mb-8">
-          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">
-            Vocabulary Status
-          </h2>
-          <VocabStatusPanel setId={set.id} groups={vocabGroups} loading={vocabLoading} />
+        {/* Games section */}
+        <div className="mb-10">
+          <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Games</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {GAMES.map(game => {
+              const Icon = game.icon;
+              return (
+                <button
+                  key={game.key}
+                  onClick={() => navigate(game.path(set.id))}
+                  className={`flex items-start gap-3 p-4 rounded-xl border-2 transition-all text-left ${game.color}`}
+                >
+                  <div className="shrink-0 mt-0.5">
+                    <Icon className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">{game.label}</p>
+                    <p className="text-xs opacity-70 mt-0.5">{game.desc}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Band Distribution Chart */}
+        {!vocabLoading && cardCount > 0 && (
+          <div className="mb-8 bg-white border rounded-2xl p-5">
+            <BandDistributionChart bandCounts={bandCounts} totalCards={cardCount} />
+          </div>
+        )}
 
         {/* Daily progress chart for this set */}
         <div className="mb-8">
           <DailyProgressChart setId={set.id} />
+        </div>
+
+        {/* Learning Trend Chart */}
+        <div className="mb-8 bg-white border rounded-2xl p-5">
+          <LearningTrendChart setId={set.id} />
         </div>
 
         {/* Cards section with tabs */}
